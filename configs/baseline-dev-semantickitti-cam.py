@@ -264,12 +264,10 @@ model = dict(
         depth_weight_cfg=dict(
             enabled=True,
             mode='linear',
-            depth_axis=0,
-            num_bins=8,
-            min_weight=0.7,
-            max_weight=1.3,
+            min_weight=0.5,
+            max_weight=1.5,
             normalize=True,
-        ),
+        )
         conv_cfg=dict(type='Conv3d', bias=False),
         norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
         class_frequencies=semantic_kitti_class_frequencies

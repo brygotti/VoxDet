@@ -168,103 +168,105 @@ class OccHead(nn.Module):
             self.class_weights = torch.ones(17)/17  # FIXME hardcode 17
 
         # Nouvelle depth loss
+        # ici depth cest pour la distance a la camera, qui correspond a l’axe X dans le format de sortie de VoxDet / SemanticKITTI.
+        # L’idee est de donner plus de poids aux erreurs sur les voxels proches de la camera et moins de poids aux erreurs sur les voxels lointains.
+        # On peut aussi experimenter avec differentes fonctions de poids (lineaire, exponentielle, inverse) pour voir ce qui marche le mieux.
         depth_weight_defaults = dict(
             enabled=False,
-            mode='linear', # linear, exp, inverse
-            depth_axis=0, # l’axe de profondeur dans le tenseur de sortie (0 pour [B, C, D, H, W], 1 pour [B, D, H, W])
-            num_bins=8, # nombre de couche de profondeur
-            min_weight=0.5, # poids minimum pour les couches les plus proches
-            max_weight=1.5, # poids maximum pour les couches les plus lointaines
-            normalize=True, # normaliser les poids pour garder une echelle de loss stable
+            mode='linear',      # linear, exp, inverse
+            min_weight=0.5,     # poids minimum pour les voxels proches
+            max_weight=1.5,     # poids maximum pour les voxels lointains
+            normalize=True,     # normaliser les poids pour garder une echelle de loss stable
         )
 
         # prends par default si pas de config fournie
-        self.depth_weight_cfg = depth_weight_defaults if depth_weight_cfg is None else {**depth_weight_defaults, **depth_weight_cfg}
+        self.depth_weight_cfg = (
+            depth_weight_defaults
+            if depth_weight_cfg is None
+            else {**depth_weight_defaults, **depth_weight_cfg}
+        )
 
-    # Decoupe un tenseur de sortie en tranches de profondeur selon l’axe indique, en gardant les dimensions de batch et de canaux intactes
-    def _slice_volume(self, tensor, start, end, depth_axis):
-        dim = depth_axis + 1 if tensor.dim() == 4 else depth_axis + 2 # on ajoute 1 pour ignorer le batch, (ou 1 de plus pour ignorer les canaux)
-        index = [slice(None)] * tensor.dim() # on cree une liste d’index qui prend tout pour chaque dimension
-        index[dim] = slice(start, end) # on remplace l’index de la dimension de profondeur par une tranche qui va de start a end
-        return tensor[tuple(index)] # on convertit la liste d’index en tuple pour l’utiliser comme index de tenseur
 
-    # Construit les poids de profondeur en fonction de la configuration. Elle retourne les bords des bins et les poids correspondants.
-    def _build_depth_weights(self, depth_size, device):
-        # check si depth weighting est enabled
+    # Construit une weight map selon la distance forward.
+    # target_voxels est suppose etre de forme [B, X, Y, Z].
+    # On retourne un tenseur [1, X, 1, 1], broadcastable sur [B, X, Y, Z].
+    def _build_forward_weight_map(self, target_voxels):
         cfg = self.depth_weight_cfg
-        if not cfg.get('enabled', False):
-            return None
+        device = target_voxels.device
 
-        # On cree des bins fixes, puis un poids scalaire pour chaque bin.
-        num_bins = max(1, int(cfg['num_bins']))
-        mode = cfg['mode']
-        min_weight = float(cfg['min_weight'])
-        max_weight = float(cfg['max_weight'])
-        normalize = bool(cfg['normalize'])
+        # Dans VoxDet / SemanticKITTI, target_voxels = [B, X, Y, Z]
+        # Donc X est l'axe de distance forward.
+        x_size = target_voxels.shape[1]
 
-        # On cree des bins de profondeur de taille egale, en arrondissant pour couvrir toute la profondeur. Le dernier bin peut etre plus grand si depth_size n'est pas divisible par num_bins.
-        bin_edges = torch.linspace(0, depth_size, steps=num_bins + 1, device=device)
-        bin_edges = torch.round(bin_edges).long()
-        bin_edges[0] = 0
-        bin_edges[-1] = depth_size
+        mode = cfg.get('mode', 'linear')
+        min_weight = float(cfg.get('min_weight', 0.5))
+        max_weight = float(cfg.get('max_weight', 1.5))
+        normalize = bool(cfg.get('normalize', True))
 
-        # Centre normalise de chaque bin, entre 0 et 1.
-        # rester entre 0 et 1 sert a garder une echelle de poids stable, et a permettre des fonctions de poids qui varient de maniere non lineaire avec la profondeur.
-        centers = (torch.arange(num_bins, device=device, dtype=torch.float32) + 0.5) / num_bins
+        # Centre normalise de chaque voxel sur l'axe X, entre 0 et 1.
+        # proche camera / ego vehicule -> proche de 0
+        # loin devant -> proche de 1
+        centers = (torch.arange(x_size, device=device, dtype=torch.float32) + 0.5) / x_size
 
-        # on aura qqch du style :
-        # bin_edges = [0, 4, 8, 12, 16, 20, 24, 28, 32] pour depth_size=32 et num_bins=8
-        # centers = [0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375] pour les centres normalises des bins
-
-        # On calcule un poids pour chaque bin en fonction de son centre normalise, selon le mode choisi.
+        # On calcule un poids pour chaque position X en fonction de sa distance forward.
         if mode == 'linear':
             weights = min_weight + (max_weight - min_weight) * centers
+
         elif mode == 'exp':
             alpha = float(cfg.get('alpha', 2.0))
             weights = torch.exp(alpha * centers)
+
         elif mode == 'inverse':
             alpha = float(cfg.get('alpha', 4.0))
             weights = 1.0 / (1.0 + alpha * centers)
+
         else:
             raise ValueError(f'Unsupported depth weight mode: {mode}')
 
         if normalize:
             weights = weights / weights.mean().clamp_min(1e-6)
 
-        return bin_edges, weights
-
-    # Applique la depth loss
-    def _depth_weighted_loss(self, loss_fn, output_tensor, target_tensor):
+        # Shape [1, X, 1, 1] pour pouvoir multiplier une loss [B, X, Y, Z]
+        return weights.view(1, x_size, 1, 1)
+    
+    # Applique une CE ponderee par distance forward.
+    # output_voxels est suppose etre [B, C, X, Y, Z].
+    # target_voxels est suppose etre [B, X, Y, Z].
+    def _forward_weighted_ce_loss(self, output_voxels, target_voxels):
         cfg = self.depth_weight_cfg
+
+        # Si la pondération par distance n'est pas activee, on garde la loss originale.
         if not cfg.get('enabled', False):
-            return loss_fn(output_tensor, target_tensor)
+            return CE_ssc_loss(
+                output_voxels,
+                target_voxels,
+                self.class_weights.type_as(output_voxels),
+                ignore_index=255
+            )
 
-        
-        depth_axis = int(cfg['depth_axis'])
+        # Cross entropy voxel-wise, sans reduction.
+        # La sortie est [B, X, Y, Z], donc une loss par voxel.
+        voxel_ce = F.cross_entropy(
+            output_voxels,
+            target_voxels.long(),
+            weight=self.class_weights.type_as(output_voxels),
+            ignore_index=255,
+            reduction='none' # permet de garder une loss par voxel pour appliquer la pondération ensuite
+        )
 
-        # On recalcul la depth size
-        depth_size = output_tensor.shape[depth_axis + 2] if output_tensor.dim() == 5 else target_tensor.shape[depth_axis + 1]
-        # On construit les bins de profondeur et les poids associes
-        bin_edges, bin_weights = self._build_depth_weights(depth_size, output_tensor.device)
+        # On construit les poids selon l'axe X.
+        distance_weights = self._build_forward_weight_map(target_voxels)
 
-        # On va appliquer la loss sur chaque tranche de profondeur, puis faire une moyenne ponderee par les poids de profondeur.
-        total_loss = output_tensor.new_tensor(0.0)
-        total_weight = output_tensor.new_tensor(0.0)
+        # On ignore les voxels avec label 255. 
+        valid_mask = (target_voxels != 255).float()
 
-        # On itere sur les bins de profondeur, en decoupant le tenseur de sortie et le tenseur cible en tranches correspondantes.
-        for start, end, weight in zip(bin_edges[:-1], bin_edges[1:], bin_weights):
-            start = int(start.item())
-            end = int(end.item())
-            if end <= start:
-                continue
+        # On applique la pondération par distance.
+        weighted_loss = voxel_ce * distance_weights * valid_mask
 
-            output_slice = self._slice_volume(output_tensor, start, end, depth_axis)
-            target_slice = self._slice_volume(target_tensor, start, end, depth_axis)
-            # On calcule la meme fonction loss sur la tranche, puis on la pondere.
-            total_loss = total_loss + weight * loss_fn(output_slice, target_slice)
-            total_weight = total_weight + weight
+        # Moyenne ponderee uniquement sur les voxels valides.
+        normalizer = (distance_weights * valid_mask).sum().clamp_min(1e-6)
 
-        return total_loss / total_weight.clamp_min(1e-6)
+        return weighted_loss.sum() / normalizer
     
     def forward(self, voxel_feats, img_metas=None, img_feats=None, gt_occ=None):
         assert type(voxel_feats) is list and len(voxel_feats) == self.num_level
@@ -293,16 +295,20 @@ class OccHead(nn.Module):
         # On applique la depth loss
 
         # loss voxel ce = loss de classification standard
-        loss_dict['loss_voxel_ce'] = self.loss_voxel_ce_weight * self._depth_weighted_loss(ce_loss, output_voxels, target_voxels)
+        loss_dict['loss_voxel_ce'] = self.loss_voxel_ce_weight * self._forward_weighted_ce_loss(output_voxels, target_voxels)
         #loss_dict['loss_voxel_ce'] = self.loss_voxel_ce_weight * CE_ssc_loss(output_voxels, target_voxels, self.class_weights.type_as(output_voxels), ignore_index=255)
+        
+
+        # Pour les 2 autres losses, on applique pas la pondération par distance.
+        # Elles calculent des statistiques globales sur les classes / géométrie.
+        # Les pondérer voxel-wise peut changer leur sens.
+
 
         # loss voxel sem scal = loss de similarite semantique
-        loss_dict['loss_voxel_sem_scal'] = self.loss_voxel_sem_scal_weight * self._depth_weighted_loss(sem_loss, output_voxels, target_voxels)
-        #loss_dict['loss_voxel_sem_scal'] = self.loss_voxel_sem_scal_weight * sem_scal_loss(output_voxels, target_voxels, ignore_index=255)
+        loss_dict['loss_voxel_sem_scal'] = self.loss_voxel_sem_scal_weight * sem_scal_loss(output_voxels, target_voxels, ignore_index=255)
 
         # loss voxel geo scal = loss de similarite geometrique
-        loss_dict['loss_voxel_geo_scal'] = self.loss_voxel_geo_scal_weight * self._depth_weighted_loss(geo_loss, output_voxels, target_voxels)
-        #loss_dict['loss_voxel_geo_scal'] = self.loss_voxel_geo_scal_weight * geo_scal_loss(output_voxels, target_voxels, ignore_index=255, non_empty_idx=self.empty_idx)
+        loss_dict['loss_voxel_geo_scal'] = self.loss_voxel_geo_scal_weight * geo_scal_loss(output_voxels, target_voxels, ignore_index=255, non_empty_idx=self.empty_idx)
 
         return loss_dict
     

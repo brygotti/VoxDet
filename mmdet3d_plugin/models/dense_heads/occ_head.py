@@ -210,6 +210,7 @@ class OccHead(nn.Module):
 
         # On calcule un poids pour chaque position X en fonction de sa distance forward.
         # Les voxels proches de la camera auront des poids plus eleves, les voxels lointains auront des poids plus faibles. sauf inverse
+        
         if mode == 'linear':
             weights = max_weight + (min_weight - max_weight) * centers
 

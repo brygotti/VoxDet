@@ -119,7 +119,7 @@ class OccHead(nn.Module):
         class_frequencies=None,
         train_cfg=None,
         test_cfg=None,
-        depth_weight_cfg=None, # on ajoute un nouveau parametre pour depth loss
+        distance_weight_cfg=None, # on ajoute un nouveau parametre pour distance loss
     ):
         super(OccHead, self).__init__()
         
@@ -171,19 +171,19 @@ class OccHead(nn.Module):
         # ici depth cest pour la distance a la camera, qui correspond a l’axe X dans le format de sortie de VoxDet / SemanticKITTI.
         # L’idee est de donner plus de poids aux erreurs sur les voxels proches de la camera et moins de poids aux erreurs sur les voxels lointains.
         # On peut aussi experimenter avec differentes fonctions de poids (lineaire, exponentielle, inverse) pour voir ce qui marche le mieux.
-        depth_weight_defaults = dict(
+        distance_weight_defaults = dict(
             enabled=False,
             mode='linear',      # linear, exp, inverse
-            min_weight=0.5,     # poids minimum pour les voxels proches
-            max_weight=1.5,     # poids maximum pour les voxels lointains
+            min_weight=0.5,
+            max_weight=1.5,
             normalize=True,     # normaliser les poids pour garder une echelle de loss stable
         )
 
         # prends par default si pas de config fournie
-        self.depth_weight_cfg = (
-            depth_weight_defaults
-            if depth_weight_cfg is None
-            else {**depth_weight_defaults, **depth_weight_cfg}
+        self.distance_weight_cfg = (
+            distance_weight_defaults
+            if distance_weight_cfg is None
+            else {**distance_weight_defaults, **distance_weight_cfg}
         )
 
 
@@ -191,12 +191,12 @@ class OccHead(nn.Module):
     # target_voxels est suppose etre de forme [B, X, Y, Z].
     # On retourne un tenseur [1, X, 1, 1], broadcastable sur [B, X, Y, Z].
     def _build_forward_weight_map(self, target_voxels):
-        cfg = self.depth_weight_cfg
+        cfg = self.distance_weight_cfg
         device = target_voxels.device
 
         # Dans VoxDet / SemanticKITTI, target_voxels = [B, X, Y, Z]
         # Donc X est l'axe de distance forward.
-        x_size = target_voxels.shape[1]
+        x_size = target_voxels.shape[1] # combien il y a de positions sur l’axe forward
 
         mode = cfg.get('mode', 'linear')
         min_weight = float(cfg.get('min_weight', 0.5))
@@ -209,19 +209,20 @@ class OccHead(nn.Module):
         centers = (torch.arange(x_size, device=device, dtype=torch.float32) + 0.5) / x_size
 
         # On calcule un poids pour chaque position X en fonction de sa distance forward.
+        # Les voxels proches de la camera auront des poids plus eleves, les voxels lointains auront des poids plus faibles. sauf inverse
         if mode == 'linear':
-            weights = min_weight + (max_weight - min_weight) * centers
+            weights = max_weight + (min_weight - max_weight) * centers
 
         elif mode == 'exp':
             alpha = float(cfg.get('alpha', 2.0))
-            weights = torch.exp(alpha * centers)
+            weights = torch.exp(-alpha * centers)
 
         elif mode == 'inverse':
             alpha = float(cfg.get('alpha', 4.0))
             weights = 1.0 / (1.0 + alpha * centers)
 
         else:
-            raise ValueError(f'Unsupported depth weight mode: {mode}')
+            raise ValueError(f'Unsupported distance weight mode: {mode}')
 
         if normalize:
             weights = weights / weights.mean().clamp_min(1e-6)
@@ -230,10 +231,11 @@ class OccHead(nn.Module):
         return weights.view(1, x_size, 1, 1)
     
     # Applique une CE ponderee par distance forward.
+    # On garde la CE qui etait la de base, mais on multiplie chaque voxel par un poids qui depend de sa distance forward.
     # output_voxels est suppose etre [B, C, X, Y, Z].
     # target_voxels est suppose etre [B, X, Y, Z].
-    def _forward_weighted_ce_loss(self, output_voxels, target_voxels):
-        cfg = self.depth_weight_cfg
+    def _forward_distance_ce_loss(self, output_voxels, target_voxels):
+        cfg = self.distance_weight_cfg
 
         # Si la pondération par distance n'est pas activee, on garde la loss originale.
         if not cfg.get('enabled', False):
@@ -257,7 +259,7 @@ class OccHead(nn.Module):
         # On construit les poids selon l'axe X.
         distance_weights = self._build_forward_weight_map(target_voxels)
 
-        # On ignore les voxels avec label 255. 
+        # On ignore les voxels avec label 255. (comme dans loriginal)
         valid_mask = (target_voxels != 255).float()
 
         # On applique la pondération par distance.
@@ -292,10 +294,10 @@ class OccHead(nn.Module):
         sem_loss = lambda out, tgt: sem_scal_loss(out, tgt, ignore_index=255)
         geo_loss = lambda out, tgt: geo_scal_loss(out, tgt, ignore_index=255, non_empty_idx=self.empty_idx)
 
-        # On applique la depth loss
+        # On applique la distance loss
 
         # loss voxel ce = loss de classification standard
-        loss_dict['loss_voxel_ce'] = self.loss_voxel_ce_weight * self._forward_weighted_ce_loss(output_voxels, target_voxels)
+        loss_dict['loss_voxel_ce'] = self.loss_voxel_ce_weight * self._forward_distance_ce_loss(output_voxels, target_voxels)
         #loss_dict['loss_voxel_ce'] = self.loss_voxel_ce_weight * CE_ssc_loss(output_voxels, target_voxels, self.class_weights.type_as(output_voxels), ignore_index=255)
         
 

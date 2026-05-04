@@ -38,6 +38,8 @@ class FoveatedVoxelNeck(BaseModule):
         pool_sizes=(1, 3, 5),
         fixation=None,
         learnable_fixation=False,
+        soft_boundary=True,
+        boundary_sharpness=20.0,
     ):
         super().__init__()
         assert len(pool_sizes) == len(zone_radii) + 1, (
@@ -46,6 +48,8 @@ class FoveatedVoxelNeck(BaseModule):
         )
         for k in pool_sizes:
             assert k % 2 == 1, f"pool_sizes must be odd integers, got {k}"
+        self.soft_boundary = soft_boundary
+        self.boundary_sharpness = boundary_sharpness
 
         self.zone_radii = list(zone_radii)
         self.pool_sizes = list(pool_sizes)
@@ -106,18 +110,39 @@ class FoveatedVoxelNeck(BaseModule):
                 scales.append(F.avg_pool3d(x, kernel_size=k_eff, stride=1,
                                            padding=k_eff // 2, count_include_pad=False))
 
-        # Build binary zone masks and blend scales.
-        out = torch.zeros_like(x)
-        for i, (scale, pool_k) in enumerate(zip(scales, self.pool_sizes)):
-            if i == 0:
-                mask = (dist <= self.zone_radii[0]).float()
-            elif i == len(self.pool_sizes) - 1:
-                mask = (dist > self.zone_radii[-1]).float()
-            else:
-                mask = ((dist > self.zone_radii[i - 1]) & (dist <= self.zone_radii[i])).float()
+        # Build per-zone weight maps and blend scales.
+        # soft_boundary=True: sigmoid transitions avoid hard edges at zone boundaries.
+        # soft_boundary=False: binary masks (faster, may cause boundary artifacts).
+        s = self.boundary_sharpness
+        n = len(self.zone_radii)
 
-            # mask: [X, Y, Z] → broadcast to [B, C, X, Y, Z]
-            out = out + mask.unsqueeze(0).unsqueeze(0) * scale
+        if self.soft_boundary:
+            # gate[i](d) = sigmoid(s * (r_i - d)): probability of being in zone <= i
+            # zone weight[i] = gate[i] - gate[i-1], with gate[-1]=0 and gate[n]=1
+            gates = [torch.sigmoid(s * (dist - r)) for r in self.zone_radii]
+            # gates[i] is high where dist > r_i  (peripheral side)
+            weight_fovea = 1.0 - gates[0]                          # zone 0
+            weight_periph = gates[-1]                               # last zone
+            weights = [weight_fovea]
+            for i in range(1, n):
+                weights.append(gates[i - 1] - gates[i])
+            weights.append(weight_periph)
+        else:
+            weights = []
+            for i in range(len(self.pool_sizes)):
+                if i == 0:
+                    weights.append((dist <= self.zone_radii[0]).float())
+                elif i == n:
+                    weights.append((dist > self.zone_radii[-1]).float())
+                else:
+                    weights.append(
+                        ((dist > self.zone_radii[i - 1]) & (dist <= self.zone_radii[i])).float()
+                    )
+
+        out = torch.zeros_like(x)
+        for w, scale in zip(weights, scales):
+            # w: [X, Y, Z] → broadcast to [B, C, X, Y, Z]
+            out = out + w.unsqueeze(0).unsqueeze(0) * scale
 
         return out
 

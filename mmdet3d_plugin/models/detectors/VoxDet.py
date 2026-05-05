@@ -276,13 +276,19 @@ class VoxDet(BaseModule):
         if self.depth_loss and depth is not None:
             losses['loss_depth'] = self.depth_net.get_depth_loss(data_dict['img_metas']['gt_depths'], depth)
 
-        losses_occupancy = self.pts_bbox_head.loss(
-            output_voxels=output['output_voxels'],
-            target_voxels=gt_occ,
-            output_bbox=output['output_bbox'],
-            img_metas=img_metas,
-            gt_offset=gt_offset,
-        )
+        if 'output_bbox' in output:
+            losses_occupancy = self.pts_bbox_head.loss(
+                output_voxels=output['output_voxels'],
+                target_voxels=gt_occ,
+                output_bbox=output['output_bbox'],
+                img_metas=img_metas,
+                gt_offset=gt_offset,
+            )
+        else:
+            losses_occupancy = self.pts_bbox_head.loss(
+                output_voxels=output['output_voxels'],
+                target_voxels=gt_occ,
+            )
 
         losses.update(losses_occupancy)
         pred = output['output_voxels']

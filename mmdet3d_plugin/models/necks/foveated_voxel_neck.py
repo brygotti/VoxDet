@@ -36,6 +36,8 @@ class FoveatedVoxelNeck(BaseModule):
         self,
         zone_radii=(0.2, 0.4),
         pool_sizes=(1, 3, 5),
+        strides=(1, 1, 1),
+        upsample_mode='trilinear',
         fixation=None,
         learnable_fixation=False,
         soft_boundary=True,
@@ -46,10 +48,17 @@ class FoveatedVoxelNeck(BaseModule):
             f"Expected len(pool_sizes)==len(zone_radii)+1, "
             f"got {len(pool_sizes)} vs {len(zone_radii)+1}"
         )
+        assert len(strides) == len(pool_sizes), (
+            f"Expected len(strides)==len(pool_sizes), "
+            f"got {len(strides)} vs {len(pool_sizes)}"
+        )
+        assert strides[0] == 1, "Foveal zone (index 0) must always have stride 1."
         for k in pool_sizes:
             assert k % 2 == 1, f"pool_sizes must be odd integers, got {k}"
         self.soft_boundary = soft_boundary
         self.boundary_sharpness = boundary_sharpness
+        self.strides = list(strides)
+        self.upsample_mode = upsample_mode
 
         self.zone_radii = list(zone_radii)
         self.pool_sizes = list(pool_sizes)
@@ -93,22 +102,33 @@ class FoveatedVoxelNeck(BaseModule):
         B, C, X, Y, Z = x.shape
         dist = self._distance_map(X, Y, Z, x.device)  # [X, Y, Z]
 
-        # Clamp pool kernel to fit within the smallest spatial dimension so
-        # that the module works on any feature map size, including small FPN levels.
         min_dim = min(X, Y, Z)
 
-        # Compute multi-scale pooled versions at original spatial resolution.
+        # Compute multi-scale pooled versions, all restored to [B, C, X, Y, Z].
+        # stride=1: same-size neighbourhood averaging (original behaviour).
+        # stride>1: genuine downsampling then trilinear/nearest upsample back,
+        #           so peripheral voxels are computed from fewer unique values.
         scales = []
-        for k in self.pool_sizes:
+        for k, s in zip(self.pool_sizes, self.strides):
             k_eff = min(k, min_dim) if min_dim % 2 == 0 else min(k, min_dim - 1)
             k_eff = max(k_eff, 1)
             if k_eff % 2 == 0:
                 k_eff -= 1  # keep odd
-            if k_eff <= 1:
+
+            if k_eff <= 1 and s == 1:
                 scales.append(x)
-            else:
+            elif s == 1:
                 scales.append(F.avg_pool3d(x, kernel_size=k_eff, stride=1,
                                            padding=k_eff // 2, count_include_pad=False))
+            else:
+                # Strided downsample — padding keeps coverage across the volume.
+                x_down = F.avg_pool3d(x, kernel_size=k_eff, stride=s,
+                                      padding=k_eff // 2, count_include_pad=False)
+                align = False if self.upsample_mode == 'trilinear' else None
+                x_up = F.interpolate(x_down, size=(X, Y, Z),
+                                     mode=self.upsample_mode,
+                                     align_corners=align)
+                scales.append(x_up)
 
         # Build per-zone weight maps and blend scales.
         # soft_boundary=True: sigmoid transitions avoid hard edges at zone boundaries.

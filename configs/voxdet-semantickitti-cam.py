@@ -259,6 +259,8 @@ model = dict(
         type='FoveatedVoxelNeck',
         zone_radii=[0.2, 0.4],
         pool_sizes=[1, 3, 5],
+        strides=[1, 1, 1],       # set to [1, 2, 4] for strided peripheral pooling
+        upsample_mode='trilinear',
         fixation=[0.5, 0.5, 0.5],
         learnable_fixation=False,
     ),

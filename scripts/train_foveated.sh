@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH --job-name=voxdet_foveated
+#SBATCH --output=runs/foveated_run/slurm_%j.out
+#SBATCH --error=runs/foveated_run/slurm_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
+#SBATCH --partition=gpu          # <-- change to your cluster partition
+
+set -e
+
+# ── paths ────────────────────────────────────────────────────────────────────
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+CONFIG="${ROOT_DIR}/configs/voxdet-semantickitti-cam.py"
+LOG_FOLDER="${ROOT_DIR}/runs/foveated_run"
+
+# ── optional: resume from a checkpoint ───────────────────────────────────────
+# CKPT_PATH="${ROOT_DIR}/runs/foveated_run/tensorboard/checkpoints/last.ckpt"
+
+mkdir -p "${LOG_FOLDER}"
+
+cd "${ROOT_DIR}"
+
+python main.py \
+    --config_path "${CONFIG}" \
+    --log_folder  "${LOG_FOLDER}" \
+    --seed        42
+    # --ckpt_path "${CKPT_PATH}"   # uncomment to resume

@@ -246,6 +246,15 @@ model = dict(
             )
         )
     ),
+    occ_encoder_neck=dict(
+        type='FoveatedVoxelNeck',
+        zone_radii=[0.2, 0.4],
+        pool_sizes=[1, 3, 5],
+        strides=[1, 1, 1],
+        upsample_mode='trilinear',
+        fixation=[0.5, 0.5, 0.5],
+        learnable_fixation=False,
+    ),
     pts_bbox_head=dict(
         type='OccHead',
         in_channels=[sum(voxel_out_channels)],

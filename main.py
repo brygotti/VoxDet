@@ -13,6 +13,7 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import shutil
 import torch.distributed as dist
+import socket
 
 
 def is_main_process():
@@ -34,6 +35,9 @@ def parse_config():
     parser.add_argument('--log_every_n_steps', type=int, default=100)
     parser.add_argument('--check_val_every_n_epoch', type=int, default=1)
     parser.add_argument('--pretrain', action='store_true')
+    parser.add_argument('--wandb', action='store_true', help='Enable Weights & Biases logging')
+    parser.add_argument('--wandb_project', default='voxdet', help='W&B project name')
+    parser.add_argument('--wandb_run_name', default=None, help='W&B run name (defaults to log_folder basename)')
 
     args = parser.parse_args()
     cfg = Config.fromfile(args.config_path)
@@ -59,15 +63,26 @@ if __name__ == '__main__':
     pl.seed_everything(seed)
     num_gpu = torch.cuda.device_count()
     model = pl_model(config)
-    
+
     data_dm = DataModule(config)
+
+    loggers = [tb_logger]
+    if config.get('wandb', False):
+        run_name = config.get('wandb_run_name') or os.path.basename(log_folder)
+        wandb_logger = pl_loggers.WandbLogger(
+            project=config.get('wandb_project', 'voxdet'),
+            name=run_name,
+            save_dir=log_folder,
+            config=config.to_dict(),
+        )
+        loggers.append(wandb_logger)
 
     checkpoint_callback = ModelCheckpoint(
         monitor='val/mIoU',
         mode='max',
         save_last=True,
         filename='best')
-    
+
     if not config.eval:
         trainer = pl.Trainer(
             devices=[i for i in range(num_gpu)],
@@ -81,7 +96,7 @@ if __name__ == '__main__':
                 checkpoint_callback,
                 LearningRateMonitor(logging_interval='step')
             ],
-            logger=tb_logger,
+            logger=loggers,
             profiler=profiler,
             sync_batchnorm=True,
             log_every_n_steps=config['log_every_n_steps'],
@@ -95,7 +110,7 @@ if __name__ == '__main__':
                 accelerator='gpu',
                 find_unused_parameters=False
             ),
-            logger=tb_logger,
+            logger=loggers,
             profiler=profiler
         )
         trainer.test(model=model, datamodule=data_dm, ckpt_path=config['ckpt_path'])

@@ -10,7 +10,11 @@
 #SBATCH --time=24:00:00
 #SBATCH --partition=gpu          # <-- change to your cluster partition
 
+WANDB_KEY=$1        # First argument: your W&B API key
+
 set -e
+
+export WANDB_API_KEY=$WANDB_KEY
 
 # ── paths ────────────────────────────────────────────────────────────────────
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,7 +29,10 @@ mkdir -p "${LOG_FOLDER}"
 cd "${ROOT_DIR}"
 
 python main.py \
-    --config_path "${CONFIG}" \
-    --log_folder  "${LOG_FOLDER}" \
-    --seed        42
+    --config_path    "${CONFIG}" \
+    --log_folder     "${LOG_FOLDER}" \
+    --seed           42 \
+    --wandb \
+    --wandb_project  voxdet \
+    --wandb_run_name baseline_foveated
     # --ckpt_path "${CKPT_PATH}"   # uncomment to resume

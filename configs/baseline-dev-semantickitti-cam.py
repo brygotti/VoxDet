@@ -296,4 +296,4 @@ lr_scheduler = dict(
     frequency=1
 )
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
-load_from='/mnt/vita/scratch/vita-students/users/wuli/code/VoxDet_dev/ckpt/preatrain_depth_model.ckpt'
+load_from=None

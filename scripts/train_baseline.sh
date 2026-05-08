@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=voxdet_baseline
-#SBATCH --output=runs/baseline_run/slurm_%j.out
-#SBATCH --error=runs/baseline_run/slurm_%j.err
+#SBATCH --output=/home/lagutova/VI-Project/VoxDet/runs/baseline_run/slurm_%j.out
+#SBATCH --error=/home/lagutova/VI-Project/VoxDet/runs/baseline_run/slurm_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:2
@@ -17,7 +17,7 @@ set -e
 export WANDB_API_KEY=$WANDB_KEY
 
 # ── paths ────────────────────────────────────────────────────────────────────
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT_DIR="/home/lagutova/VI-Project/VoxDet"
 CONFIG="${ROOT_DIR}/configs/baseline-dev-semantickitti-cam.py"
 LOG_FOLDER="${ROOT_DIR}/runs/baseline_run"
 

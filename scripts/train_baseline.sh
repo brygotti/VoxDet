@@ -24,6 +24,9 @@ LOG_FOLDER="${ROOT_DIR}/runs/baseline_run"
 # ── optional: resume from a checkpoint ───────────────────────────────────────
 # CKPT_PATH="${ROOT_DIR}/runs/baseline_run/tensorboard/checkpoints/last.ckpt"
 
+source /home/lagutova/miniconda/etc/profile.d/conda.sh
+conda activate voxdet
+
 mkdir -p "${LOG_FOLDER}"
 
 cd "${ROOT_DIR}"

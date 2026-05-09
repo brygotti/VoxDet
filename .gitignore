@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.eggs/
+
+# Build artifacts
+build/
+dist/
+*.so
+*.o
+*.a
+
+# Checkpoints and weights
+ckpts/
+*.pth
+*.ckpt
+*.pt
+*.safetensors
+
+# Training runs and logs
+runs/
+logs/
+wandb/
+*.out
+*.err
+
+# Data
+*.npy
+*.npz
+*.bin
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.DS_Store
+profiler.txt

@@ -18,7 +18,7 @@ conda activate voxdet
 mkdir -p /home/lagutova/VI-Project/VoxDet/runs/preprocess
 
 DATA_PATH='/scratch/izar/lagutova/semantickittii/dataset'
-CKPT='/home/lagutova/VI-Project/VoxFormer/preprocess/mobilestereonet/MSNet3D_SF_DS_KITTI2015.ckpt'
+CKPT='/home/lagutova/VI-Project/VoxDet/preprocess/mobilestereonet/MSNet3D_SF_DS_KITTI2015.ckpt'
 PREPROCESS_DIR='/home/lagutova/VI-Project/VoxDet/preprocess/mobilestereonet'
 
 cd "${PREPROCESS_DIR}"

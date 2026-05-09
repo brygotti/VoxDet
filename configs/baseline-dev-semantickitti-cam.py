@@ -1,6 +1,6 @@
-data_root = '/mnt/vita/scratch/datasets/SemanticKITTI/dataset/'
-ann_file = '/mnt/vita/scratch/datasets/SemanticKITTI/dataset/labels/'
-stereo_depth_root = '/mnt/vita/scratch/datasets/SemanticKITTI/depth/'
+data_root = '/scratch/izar/lagutova/semantickittii/dataset/'
+ann_file = '/scratch/izar/lagutova/semantickittii/labels/'
+stereo_depth_root = '/scratch/izar/lagutova/semantickittii/depth/'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDataset'
@@ -51,7 +51,7 @@ train_pipeline = [
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti', load_seg=False),
     dict(type='LoadAnnotationOcc', bda_aug_conf=bda_aug_conf, apply_bda=False,
             is_train=True, point_cloud_range=point_cloud_range),
-    dict(type='CollectData', keys=['img_inputs', 'gt_occ'], 
+    dict(type='CollectData', keys=['img_inputs', 'gt_occ'],
             meta_keys=['pc_range', 'occ_size', 'raw_img', 'stereo_depth', 'focal_length', 'baseline', 'img_shape', 'gt_depths']),
 ]
 
@@ -74,7 +74,7 @@ test_pipeline = [
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
     dict(type='LoadAnnotationOcc', bda_aug_conf=bda_aug_conf, apply_bda=False,
             is_train=False, point_cloud_range=point_cloud_range),
-    dict(type='CollectData', keys=['img_inputs','gt_occ'],  
+    dict(type='CollectData', keys=['img_inputs','gt_occ'],
             meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth', 'focal_length', 'baseline', 'img_shape', 'gt_depths'])
 ]
 
@@ -296,4 +296,4 @@ lr_scheduler = dict(
     frequency=1
 )
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
-load_from=None
+load_from='/mnt/vita/scratch/vita-students/users/wuli/code/VoxDet_dev/ckpt/preatrain_depth_model.ckpt'

@@ -33,6 +33,11 @@ class VoxFormerHeadCrossAttention(nn.Module):
         data_config,
         embed_dims,
         cross_transformer,
+        foveal_radius=None,
+        mid_radius=None,
+        mid_stride=1,
+        peripheral_stride=1,
+        fixation=(0.5, 0.5, 0.5),
         **kwargs,
     ):
         super().__init__()
@@ -40,6 +45,11 @@ class VoxFormerHeadCrossAttention(nn.Module):
         self.volume_w = volume_w
         self.volume_z = volume_z
         self.embed_dims = embed_dims
+        self.foveal_radius = foveal_radius
+        self.mid_radius = mid_radius
+        self.mid_stride = mid_stride
+        self.peripheral_stride = peripheral_stride
+        self.fixation = list(fixation)
 
         self.data_config = data_config
         self.cross_transformer = build_transformer(cross_transformer)
@@ -105,7 +115,44 @@ class VoxFormerHeadCrossAttention(nn.Module):
         vox_coords, ref_3d = self.vox_coords.clone(), self.ref_3d.clone()
         unmasked_idx = torch.nonzero(proposal.reshape(-1) > 0).view(-1)
         masked_idx = torch.nonzero(proposal.reshape(-1) == 0).view(-1)
-        
+
+        if self.foveal_radius is not None and len(unmasked_idx) > 0:
+            # L-inf (Chebyshev) distance from fixation for each unmasked voxel
+            fixation = torch.tensor(self.fixation, dtype=ref_3d.dtype, device=device)
+            dists = (ref_3d[unmasked_idx] - fixation).abs().max(dim=-1).values
+
+            # Zone 1 — foveal: dist <= foveal_radius, keep all
+            foveal_unmasked = unmasked_idx[dists <= self.foveal_radius]
+            beyond_foveal = ~(dists <= self.foveal_radius)
+
+            # Zone 2 — mid: foveal_radius < dist <= mid_radius, subsample by mid_stride
+            if self.mid_radius is not None:
+                mid_mask = beyond_foveal & (dists <= self.mid_radius)
+                peripheral_mask = beyond_foveal & (dists > self.mid_radius)
+            else:
+                mid_mask = beyond_foveal
+                peripheral_mask = torch.zeros_like(beyond_foveal)
+
+            mid_unmasked = unmasked_idx[mid_mask]
+            peripheral_unmasked = unmasked_idx[peripheral_mask]
+
+            def subsample(tokens, stride):
+                if stride <= 1 or len(tokens) == 0:
+                    return tokens, tokens.new_empty(0)
+                keep_pos = torch.arange(0, len(tokens), stride, device=device)
+                drop_mask = torch.ones(len(tokens), dtype=torch.bool, device=device)
+                drop_mask[keep_pos] = False
+                return tokens[keep_pos], tokens[drop_mask]
+
+            mid_kept, mid_dropped = subsample(mid_unmasked, self.mid_stride)
+            peripheral_kept, peripheral_dropped = subsample(peripheral_unmasked, self.peripheral_stride)
+
+            active_idx = torch.cat([foveal_unmasked, mid_kept, peripheral_kept])
+            mlp_prior_idx = torch.cat([masked_idx, mid_dropped, peripheral_dropped])
+        else:
+            active_idx = unmasked_idx
+            mlp_prior_idx = masked_idx
+
         # Compute seed features of query proposals by deformable cross attention
         seed_feats = self.cross_transformer.get_vox_features(
             mlvl_feats,
@@ -114,7 +161,7 @@ class VoxFormerHeadCrossAttention(nn.Module):
             self.volume_w,
             ref_3d=ref_3d,
             vox_coords=vox_coords,
-            unmasked_idx=unmasked_idx,
+            unmasked_idx=active_idx,
             grid_length=None,
             bev_pos=None,
             #  bev_pos=bev_pos_cross_attn,
@@ -125,9 +172,9 @@ class VoxFormerHeadCrossAttention(nn.Module):
 
         vox_feats = torch.empty((self.volume_h, self.volume_w, self.volume_z, self.embed_dims), device=volume_queries.device)
         vox_feats_flatten = vox_feats.reshape(-1, self.embed_dims)
-        vox_feats_flatten[vox_coords[unmasked_idx, 3], :] = seed_feats[0]
+        vox_feats_flatten[vox_coords[active_idx, 3], :] = seed_feats[0]
 
-        vox_feats_flatten[vox_coords[masked_idx, 3], :] = self.mlp_prior(lss_volume_flatten[masked_idx, :])
+        vox_feats_flatten[vox_coords[mlp_prior_idx, 3], :] = self.mlp_prior(lss_volume_flatten[mlp_prior_idx, :])
 
         vox_feats = vox_feats_flatten.reshape(self.volume_h, self.volume_w, self.volume_z, self.embed_dims)
         vox_feats = vox_feats.permute(3, 0, 1, 2).unsqueeze(0)

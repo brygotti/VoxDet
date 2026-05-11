@@ -1,6 +1,6 @@
 data_root = '/scratch/izar/lagutova/semantickittii/dataset/'
 ann_file = '/scratch/izar/lagutova/semantickittii/labels/'
-stereo_depth_root = '/scratch/izar/lagutova/semantickittii/depth/'
+stereo_depth_root = '/scratch/izar/lagutova/semantickittii/dataset/depth/'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDataset'
@@ -172,6 +172,11 @@ model = dict(
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         embed_dims=_dim_,
+        foveal_radius=0.3,
+        mid_radius=0.5,
+        mid_stride=3,
+        peripheral_stride=5,
+        fixation=[0.5, 0.5, 0.5],
         cross_transformer=dict(
             type='PerceptionTransformer_DFA3D',
             rotate_prev_bev=True,
@@ -246,15 +251,6 @@ model = dict(
             )
         )
     ),
-    occ_encoder_neck=dict(
-        type='FoveatedVoxelNeck',
-        zone_radii=[0.2, 0.4],
-        pool_sizes=[1, 3, 5],
-        strides=[1, 1, 1],
-        upsample_mode='trilinear',
-        fixation=[0.5, 0.5, 0.5],
-        learnable_fixation=False,
-    ),
     pts_bbox_head=dict(
         type='OccHead',
         in_channels=[sum(voxel_out_channels)],
@@ -296,4 +292,4 @@ lr_scheduler = dict(
     frequency=1
 )
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
-load_from='/mnt/vita/scratch/vita-students/users/wuli/code/VoxDet_dev/ckpt/preatrain_depth_model.ckpt'
+load_from='/home/lagutova/VI-Project/VoxDet/ckpts/preatrain_depth_model.ckpt'

@@ -92,15 +92,15 @@ class VoxFormerHeadCrossAttention(nn.Module):
             return zone_idx, torch.arange(n, device=device)
 
         # Block index for each token based on spatial (x, y, z) voxel coordinates
-        nb_y = (self.volume_w + stride - 1) // stride
+        nb_y = (self.volume_w + stride - 1) // stride  # plain Python int division, fine
         nb_z = (self.volume_z + stride - 1) // stride
-        bx = vox_coords[zone_idx, 0] // stride
-        by = vox_coords[zone_idx, 1] // stride
-        bz = vox_coords[zone_idx, 2] // stride
+        bx = torch.div(vox_coords[zone_idx, 0], stride, rounding_mode='floor')
+        by = torch.div(vox_coords[zone_idx, 1], stride, rounding_mode='floor')
+        bz = torch.div(vox_coords[zone_idx, 2], stride, rounding_mode='floor')
         block_ids = bx * (nb_y * nb_z) + by * nb_z + bz  # [n] unique per spatial block
 
         # Sort tokens by block so we can group them contiguously
-        sorted_order = torch.argsort(block_ids, stable=True)
+        sorted_order = torch.argsort(block_ids)
         sorted_zone  = zone_idx[sorted_order]
         sorted_bids  = block_ids[sorted_order]
 

@@ -6,16 +6,8 @@ os.environ["XDG_RUNTIME_DIR"] = "/tmp"
 # Force Mayavi/Qt to run offscreen
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-# Tell VTK to use EGL (Direct GPU) instead of X11
-os.environ["VTK_DEFAULT_OPENGL_WINDOW"] = "vtkEGLRenderWindow"
-
-# Required by some older Mesa drivers to support Mayavi's shaders
-os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-
-# Tell EGL which GPU to use. 
-# SMART TRICK: SLURM automatically sets "CUDA_VISIBLE_DEVICES" to the GPU it assigns you.
-# We pass that exact ID to EGL so it doesn't accidentally try to use a GPU you don't own!
-os.environ["EGL_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
+# Tell VTK to use OSMesa
+os.environ["VTK_DEFAULT_OPENGL_WINDOW"] = "vtkOSOpenGLRenderWindow"
 
 import numpy as np
 import random
@@ -339,7 +331,7 @@ if __name__ == '__main__':
                           lidar2cam=lidar2cam, 
                           fov_mask=fov_mask)
 
-    num_workers = 4
+    num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 8))  # Use SLURM's CPU allocation if available
     print(f"Starting parallel rendering with {num_workers} workers...")
 
     # Run in parallel!

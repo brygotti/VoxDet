@@ -42,7 +42,7 @@ echo "PREDICTION_ROOT=$PREDICTION_ROOT"
 echo "SAVE_PATH=$SAVE_PATH"
 
 CMD=(
-  python tools/visualize.py
+  python -u tools/visualize.py
   --data_root "${DATA_ROOT}"
   --prediction_root "${PREDICTION_ROOT}"
   --save_path "${SAVE_PATH}"

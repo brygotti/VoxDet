@@ -1,6 +1,21 @@
 import os
-# 指定 Qt 平台使用 offscreen 模式
+
+# Point Qt's runtime directory to /tmp
+os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+
+# Force Mayavi/Qt to run offscreen
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
+# Tell VTK to use EGL (Direct GPU) instead of X11
+os.environ["VTK_DEFAULT_OPENGL_WINDOW"] = "vtkEGLRenderWindow"
+
+# Required by some older Mesa drivers to support Mayavi's shaders
+os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
+
+# Tell EGL which GPU to use. 
+# SMART TRICK: SLURM automatically sets "CUDA_VISIBLE_DEVICES" to the GPU it assigns you.
+# We pass that exact ID to EGL so it doesn't accidentally try to use a GPU you don't own!
+os.environ["EGL_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
 
 import numpy as np
 import random
@@ -12,6 +27,7 @@ mlab.options.offscreen = True
 import time
 
 import pdb
+from argparse import ArgumentParser
 
 ''' class names:
 'car', 'bicycle', 'motorcycle', 'truck', 'other-vehicle',
@@ -212,6 +228,7 @@ def draw(
     mlab.savefig(os.path.join(save_root, save_file))
     print('saving to {}'.format(os.path.join(save_root, save_file)))
     mlab.clf()
+    mlab.close(figure) 
     return save_file
 
 def get_fov_mask(transform, intr):
@@ -252,45 +269,85 @@ def get_fov_mask(transform, intr):
                                   pix_z > 0))))
     return fov_mask
 
-sequence = '08'
-data_root = 'data/semantickitti/sequences'
-pred_root = 'CGFormer/sequences/08/predictions'
-write_root = 'data/codebase/visualize'
-gt_root = 'data/semantickitti/labels'
-calib_file = os.path.join(data_root, sequence, 'calib.txt')
-calib_all = {}
-with open(calib_file, "r") as f:
-    for line in f.readlines():
-        if line == "\n":
-            break
-        key, value = line.split(":", 1)
-        calib_all[key] = np.array([float(x) for x in value.split()])
-
-intrin = np.identity(4)
-intrin[:3, :4] = calib_all["P2"].reshape(3, 4)
-lidar2cam = np.identity(4)  # 4x4 matrix
-lidar2cam[:3, :4] = calib_all["Tr"].reshape(3, 4)
-
-pred_voxels = os.listdir(os.path.join(pred_root, sequence, 'predictions'))
-pred_voxels.sort()
-save_name = 'CGFormer'
-vox_origin = np.array([0, -25.6, -2])
-fov_mask = get_fov_mask(lidar2cam, intrin)
-
-print(len(pred_voxels))
-for pred_voxel in pred_voxels:
-    save_root = pred_voxel.split('.')[0]
-    save_root = os.path.join(write_root, save_root)
+def process_single_frame(pred_voxel, sequence, pred_root, write_root, lidar2cam, fov_mask):
+    """This function processes exactly one frame."""
+    save_root = write_root
+    save_name = pred_voxel.split('.')[0]
+    
+    # Skip if already rendered
     if os.path.exists(os.path.join(save_root, save_name + '.png')):
-        continue
-    pred = np.fromfile(os.path.join(pred_root, sequence, 'predictions', pred_voxel), dtype=np.uint16)
+        return f"Skipped {pred_voxel}"
 
-    occ_pred = pred.reshape(256, 256, 32)
-    occ_pred = occ_pred.astype(np.uint16)
+    # Load data
+    pred_path = os.path.join(pred_root, sequence, 'predictions', pred_voxel)
+    pred = np.fromfile(pred_path, dtype=np.uint16)
+    occ_pred = pred.reshape(256, 256, 32).astype(np.uint16)
     occ_pred[occ_pred == 255] = 0
-    # print(np.unique(occ_pred))
+
     vox_origin = np.array([0, -25.6, -2])
     os.makedirs(save_root, exist_ok=True)
-    occformer_img = draw(occ_pred, lidar2cam, vox_origin, fov_mask, 
-                         img_size=(1220, 370), f=707.0912, voxel_size=0.2, d=7,
-                         save_name=save_name, save_root=save_root, video_view=False)
+    
+    # Render
+    draw(occ_pred, lidar2cam, vox_origin, fov_mask,
+         img_size=(1220, 370), f=707.0912, voxel_size=0.2, d=7,
+         save_name=save_name, save_root=save_root, video_view=False)
+    
+    return f"Finished {pred_voxel}"
+
+def parse_config():
+    parser = ArgumentParser()
+    parser.add_argument('--data_root', default=None)
+    parser.add_argument('--prediction_root', default=None)
+    parser.add_argument('--save_path', default=None)
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    import concurrent.futures
+    from functools import partial
+
+    args = parse_config()
+    sequence = "08" # Only test sequence
+    data_root = os.path.join(args.data_root, "sequences")
+    gt_root = os.path.join(args.data_root, "labels")
+    pred_root = os.path.join(args.prediction_root, "sequences")
+    write_root = args.save_path
+    calib_file = os.path.join(data_root, sequence, 'calib.txt')
+    
+    calib_all = {}
+    with open(calib_file, "r") as f:
+        for line in f.readlines():
+            if line == "\n": break
+            key, value = line.split(":", 1)
+            calib_all[key] = np.array([float(x) for x in value.split()])
+
+    intrin = np.identity(4)
+    intrin[:3, :4] = calib_all["P2"].reshape(3, 4)
+    lidar2cam = np.identity(4)
+    lidar2cam[:3, :4] = calib_all["Tr"].reshape(3, 4)
+
+    pred_voxels = os.listdir(os.path.join(pred_root, sequence, 'predictions'))
+    pred_voxels.sort()
+    fov_mask = get_fov_mask(lidar2cam, intrin)
+
+    print(f"Total frames to process: {len(pred_voxels)}")
+
+    # Prepare the function with static arguments so it only needs the filename
+    worker_func = partial(process_single_frame, 
+                          sequence=sequence, 
+                          pred_root=pred_root, 
+                          write_root=write_root, 
+                          lidar2cam=lidar2cam, 
+                          fov_mask=fov_mask)
+
+    num_workers = 4
+    print(f"Starting parallel rendering with {num_workers} workers...")
+
+    # Run in parallel!
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        results = executor.map(worker_func, pred_voxels)
+        
+        # Optional: Iterate through results to catch and print exceptions
+        for res in results:
+            pass # Or print(res) if you want detailed logs
+    
+    print("All frames rendered successfully.")

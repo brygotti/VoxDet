@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=voxdet_vis
-#SBATCH --time=14:00:00
+#SBATCH --time=16:00:00
 #SBATCH --account=cs-503
 #SBATCH --qos=cs-503
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=16
 #SBATCH --output=voxdet_vis_%j.out
 #SBATCH --error=voxdet_vis_%j.err
 

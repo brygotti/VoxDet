@@ -1,13 +1,10 @@
 import os
 
-# Point Qt's runtime directory to /tmp
+# 1. Headless GPU settings
 os.environ["XDG_RUNTIME_DIR"] = "/tmp"
-
-# Force Mayavi/Qt to run offscreen
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-
-# Tell VTK to use OSMesa
-os.environ["VTK_DEFAULT_OPENGL_WINDOW"] = "vtkOSOpenGLRenderWindow"
+os.environ["VTK_DEFAULT_OPENGL_WINDOW"] = "vtkEGLRenderWindow" # GPU Backend
+os.environ["EGL_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
 
 import numpy as np
 import random
@@ -291,6 +288,7 @@ def parse_config():
     parser.add_argument('--data_root', default=None)
     parser.add_argument('--prediction_root', default=None)
     parser.add_argument('--save_path', default=None)
+    parser.add_argument('--num_workers', type=int, default=4)
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -331,7 +329,7 @@ if __name__ == '__main__':
                           lidar2cam=lidar2cam, 
                           fov_mask=fov_mask)
 
-    num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 8))  # Use SLURM's CPU allocation if available
+    num_workers = args.num_workers
     print(f"Starting parallel rendering with {num_workers} workers...")
 
     # Run in parallel!

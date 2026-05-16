@@ -11,16 +11,18 @@
 #SBATCH --error=voxdet_vis_%j.err
 
 # Usage:
-#   sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path>
+#   sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]
 #
 # Examples:
 #   sbatch visualize_voxdet.sh /scratch/izar/gotti/semantic_kitti pred visualize
+#   sbatch visualize_voxdet.sh /scratch/izar/gotti/semantic_kitti pred visualize 8
 
 cd "${SLURM_SUBMIT_DIR:-.}"
 
-DATA_ROOT=${1:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path>}
-PREDICTION_ROOT=${2:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path>}
-SAVE_PATH=${3:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path>}
+DATA_ROOT=${1:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]}
+PREDICTION_ROOT=${2:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]}
+SAVE_PATH=${3:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]}
+NUM_WORKERS=${4:-}
 
 set -e
 
@@ -40,6 +42,7 @@ echo "HOSTNAME=$(hostname)"
 echo "DATA_ROOT=$DATA_ROOT"
 echo "PREDICTION_ROOT=$PREDICTION_ROOT"
 echo "SAVE_PATH=$SAVE_PATH"
+echo "NUM_WORKERS=$NUM_WORKERS"
 
 CMD=(
   python -u tools/visualize.py
@@ -47,5 +50,9 @@ CMD=(
   --prediction_root "${PREDICTION_ROOT}"
   --save_path "${SAVE_PATH}"
 )
+
+if [[ -n "${NUM_WORKERS}" ]]; then
+  CMD+=(--num_workers "${NUM_WORKERS}")
+fi
 
 CUDA_VISIBLE_DEVICES=0 "${CMD[@]}"

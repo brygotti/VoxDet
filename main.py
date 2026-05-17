@@ -35,7 +35,6 @@ def parse_config():
     parser.add_argument('--log_every_n_steps', type=int, default=100)
     parser.add_argument('--check_val_every_n_epoch', type=int, default=1)
     parser.add_argument('--pretrain', action='store_true')
-    parser.add_argument('--fp16_precision', action='store_true')
 
     args = parser.parse_args()
     cfg = Config.fromfile(args.config_path)
@@ -84,7 +83,6 @@ if __name__ == '__main__':
                 accelerator='gpu',
                 find_unused_parameters=False
             ),
-            precision=16 if args.fp16_precision else 32,
             max_steps=config.training_steps,
             resume_from_checkpoint=None,
             callbacks=[
@@ -105,7 +103,6 @@ if __name__ == '__main__':
                 accelerator='gpu',
                 find_unused_parameters=False
             ),
-            precision=16 if args.fp16_precision else 32,
             logger=[tb_logger, wb_logger],
             profiler=profiler
         )

@@ -17,7 +17,7 @@ class pl_model(LightningBaseModel):
 
         model_config = config['model']
         self.model = build_model(model_config)
-        if config.get('load_from', None):
+        if 'load_from' in config:
             load_checkpoint(self.model, config['load_from'], map_location='cpu')
         
         self.num_class = config['num_class']

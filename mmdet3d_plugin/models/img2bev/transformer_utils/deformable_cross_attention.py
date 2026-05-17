@@ -554,11 +554,7 @@ class MSDeformableAttention3D_DFA3D(MSDeformableAttention3D):
                 attention_weights, self.im2col_step)
         '''
         if torch.cuda.is_available() and value.is_cuda:
-            if value.dtype == torch.float16:
-                MultiScaleDeformableAttnFunction = MultiScale3DDeformableAttnFunction_fp16
-            else:
-                MultiScaleDeformableAttnFunction = MultiScale3DDeformableAttnFunction_fp32
-            output, depth_score = MultiScaleDeformableAttnFunction.apply(
+            output, depth_score = MultiScale3DDeformableAttnFunction_fp32.apply(
                 value, value_dpt_dist, spatial_shapes_3D, level_start_index, sampling_locations,
                 attention_weights, self.im2col_step)
         '''

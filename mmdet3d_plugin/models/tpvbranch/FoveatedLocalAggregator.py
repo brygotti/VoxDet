@@ -29,12 +29,13 @@ Key property: no extra parameters — backbone and neck are truly shared.
 import math
 import torch
 import torch.nn.functional as F
-from mmdet3d.models.builder import BACKBONES
+from mmdet3d.models.builder import BACKBONES, NECKS
 from mmdet3d.models import builder
 from mmcv.runner import BaseModule
 
 
 @BACKBONES.register_module()
+@NECKS.register_module()
 class FoveatedLocalAggregator(BaseModule):
     """Two-stream foveated 3D backbone (shared backbone + FPN neck weights).
 
@@ -78,7 +79,7 @@ class FoveatedLocalAggregator(BaseModule):
         print(
             f"[FoveatedLocalAggregator] foveal crop: "
             f"x[{self.x0}:{self.x1}] y[{self.y0}:{self.y1}] z[{self.z0}:{self.z1}]"
-            f" → {crop_shape}  ({100*math.prod(crop_shape)/(volume_h*volume_w*volume_z):.1f}% of volume)"
+            f" → {crop_shape}  ({100*crop_shape[0]*crop_shape[1]*crop_shape[2]/(volume_h*volume_w*volume_z):.1f}% of volume)"
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -100,13 +101,17 @@ class FoveatedLocalAggregator(BaseModule):
         out_glob = self.neck(self.backbone(x_glob))[0]
         # out_glob: (B, C, V_H/2, V_W/2, V_Z/2)
 
-        # ── Merge ──────────────────────────────────────────────────────────
-        # 1. Upsample global to full resolution (trilinear, no learnable params)
+        # ── Merge (FoveaTer-style) ──────────────────────────────────────────
+        # Tile each half-res cell to a 2×2×2 block via nearest-neighbour repeat.
+        # Every voxel in a peripheral block gets the SAME pooled feature — no
+        # smooth interpolation artefacts.  The downstream cross-attention head
+        # (_pool_zone) then picks one leader per block; because all 8 voxels in
+        # a block are identical, the average is trivially the block value itself.
         out_full = F.interpolate(
             out_glob, size=(V_H, V_W, V_Z),
-            mode='trilinear', align_corners=False,
+            mode='nearest',
         )
-        # 2. Paste the foveal features — they are sharper than the upsampled global
+        # 2. Paste exact foveal features (full-res, no pooling in this zone)
         out_full[:, :, self.x0:self.x1, self.y0:self.y1, self.z0:self.z1] = out_fov
 
         return out_full

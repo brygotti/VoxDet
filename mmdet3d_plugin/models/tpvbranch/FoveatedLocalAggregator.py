@@ -34,7 +34,6 @@ from mmdet3d.models import builder
 from mmcv.runner import BaseModule
 
 
-@BACKBONES.register_module()
 @NECKS.register_module()
 class FoveatedLocalAggregator(BaseModule):
     """Two-stream foveated 3D backbone (shared backbone + FPN neck weights).

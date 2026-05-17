@@ -13,6 +13,7 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import shutil
 import torch.distributed as dist
+import os
 
 
 def is_main_process():
@@ -52,6 +53,13 @@ if __name__ == '__main__':
         name='tensorboard'
     )
 
+    wb_logger = pl_loggers.WandbLogger(
+        project=os.getenv('WANDB_PROJECT', 'voxdet'),
+        name=log_folder,
+        save_dir=log_folder,
+        log_model=False,
+    )
+
     config.dump(os.path.join(log_folder, 'config.py'))
     profiler = SimpleProfiler(dirpath=log_folder, filename="profiler.txt")
 
@@ -81,7 +89,7 @@ if __name__ == '__main__':
                 checkpoint_callback,
                 LearningRateMonitor(logging_interval='step')
             ],
-            logger=tb_logger,
+            logger=[tb_logger, wb_logger],
             profiler=profiler,
             sync_batchnorm=True,
             log_every_n_steps=config['log_every_n_steps'],
@@ -95,7 +103,7 @@ if __name__ == '__main__':
                 accelerator='gpu',
                 find_unused_parameters=False
             ),
-            logger=tb_logger,
+            logger=[tb_logger, wb_logger],
             profiler=profiler
         )
         trainer.test(model=model, datamodule=data_dm, ckpt_path=config['ckpt_path'])

@@ -260,6 +260,26 @@ model = dict(
                 "loss_voxel_geo_scal_weight":  1.0,
                 
         },
+        distance_weight_cfg=dict(
+            enabled=True,
+            loss_type='risk',
+
+            mode='linear',
+            min_weight=0.5,
+            max_weight=1.5,
+
+            dynamic_classes=[1, 2, 3, 4, 5, 6, 7, 8],
+            dynamic_lambda=1.0,
+            boundary_lambda=1.0,
+            uncertainty_lambda=0.5,
+
+            use_distance_in_risk=True,
+            use_dynamic_in_risk=True,
+            use_boundary_in_risk=True,
+            use_uncertainty_in_risk=True,
+
+            normalize=True,
+        ),
         conv_cfg=dict(type='Conv3d', bias=False),
         norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
         class_frequencies=semantic_kitti_class_frequencies

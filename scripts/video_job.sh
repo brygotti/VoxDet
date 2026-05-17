@@ -13,8 +13,8 @@
 set -euo pipefail
 module load gcc ffmpeg
 
-INPUT_DIR=${1:?Usage: sbatch video_voxdet.sh <input_dir> <output_path>}
-OUTPUT_PATH=${2:?Usage: sbatch video_voxdet.sh <input_dir> <output_path>}
+INPUT_DIR=${1:?Usage: sbatch video_job.sh <input_dir> <output_path>}
+OUTPUT_PATH=${2:?Usage: sbatch video_job.sh <input_dir> <output_path>}
 
 if [[ ! -d "${INPUT_DIR}" ]]; then
 	echo "Input directory not found: ${INPUT_DIR}" >&2

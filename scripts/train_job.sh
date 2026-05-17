@@ -11,19 +11,19 @@
 #SBATCH --error=voxdet_train_%j.err
 
 # Usage:
-#   sbatch submit_voxdet.sh <mode|config_file> <wandb_api_key> <run_name> <num_gpus>
+#   sbatch train_job.sh <mode|config_file> <wandb_api_key> <run_name> <num_gpus>
 #
 # Examples:
-#   sbatch submit_voxdet.sh baseline <WANDB_KEY> voxdet-baseline 2
-#   sbatch submit_voxdet.sh distance <WANDB_KEY> voxdet-distance 2
-#   sbatch submit_voxdet.sh configs/baseline-dev-semantickitti-cam-distance.py <WANDB_KEY> voxdet-distance 2
+#   sbatch train_job.sh baseline <WANDB_KEY> voxdet-baseline 2
+#   sbatch train_job.sh distance <WANDB_KEY> voxdet-distance 2
+#   sbatch train_job.sh configs/baseline-dev-semantickitti-cam-distance.py <WANDB_KEY> voxdet-distance 2
 
 cd "${SLURM_SUBMIT_DIR:-.}"
 
-RUN_SPEC=${1:?Usage: sbatch submit_voxdet.sh <mode|config_file> <wandb_api_key> <run_name> <num_gpus>}
-WANDB_KEY=${2:?Usage: sbatch submit_voxdet.sh <config_file> <wandb_api_key> <run_name> <num_gpus>}
-RUN_NAME=${3:?Usage: sbatch submit_voxdet.sh <config_file> <wandb_api_key> <run_name> <num_gpus>}
-NUM_GPUS=${4:?Usage: sbatch submit_voxdet.sh <config_file> <wandb_api_key> <run_name> <num_gpus>}
+RUN_SPEC=${1:?Usage: sbatch train_job.sh <mode|config_file> <wandb_api_key> <run_name> <num_gpus>}
+WANDB_KEY=${2:?Usage: sbatch train_job.sh <config_file> <wandb_api_key> <run_name> <num_gpus>}
+RUN_NAME=${3:?Usage: sbatch train_job.sh <config_file> <wandb_api_key> <run_name> <num_gpus>}
+NUM_GPUS=${4:?Usage: sbatch train_job.sh <config_file> <wandb_api_key> <run_name> <num_gpus>}
 
 case "${RUN_SPEC}" in
   baseline)
@@ -32,12 +32,18 @@ case "${RUN_SPEC}" in
   distance)
     CONFIG_FILE="configs/baseline-dev-semantickitti-cam-distance.py"
     ;;
+  foveated)
+    CONFIG_FILE="configs/foveated-semantickitti-cam.py"
+    ;;
+  foveated-backbone)
+    CONFIG_FILE="configs/foveated-backbone-dev-semantickitti-cam.py"
+    ;;
   *.py)
     CONFIG_FILE="${RUN_SPEC}"
     ;;
   *)
     echo "Unknown run spec: ${RUN_SPEC}" >&2
-    echo "Use baseline, distance, or a direct config path ending in .py" >&2
+    echo "Use baseline, distance, foveated, foveated-backbone, or a direct config path ending in .py" >&2
     exit 1
     ;;
 esac

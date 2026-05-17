@@ -11,17 +11,17 @@
 #SBATCH --error=voxdet_vis_%j.err
 
 # Usage:
-#   sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]
+#   sbatch visualize_job.sh <data_root> <prediction_root> <save_path> [num_workers]
 #
 # Examples:
-#   sbatch visualize_voxdet.sh /scratch/izar/gotti/semantic_kitti pred visualize
-#   sbatch visualize_voxdet.sh /scratch/izar/gotti/semantic_kitti pred visualize 8
+#   sbatch visualize_job.sh /scratch/izar/gotti/semantic_kitti pred visualize
+#   sbatch visualize_job.sh /scratch/izar/gotti/semantic_kitti pred visualize 8
 
 cd "${SLURM_SUBMIT_DIR:-.}"
 
-DATA_ROOT=${1:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]}
-PREDICTION_ROOT=${2:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]}
-SAVE_PATH=${3:?Usage: sbatch visualize_voxdet.sh <data_root> <prediction_root> <save_path> [num_workers]}
+DATA_ROOT=${1:?Usage: sbatch visualize_job.sh <data_root> <prediction_root> <save_path> [num_workers]}
+PREDICTION_ROOT=${2:?Usage: sbatch visualize_job.sh <data_root> <prediction_root> <save_path> [num_workers]}
+SAVE_PATH=${3:?Usage: sbatch visualize_job.sh <data_root> <prediction_root> <save_path> [num_workers]}
 NUM_WORKERS=${4:-}
 
 set -e

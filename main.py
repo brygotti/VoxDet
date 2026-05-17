@@ -109,4 +109,3 @@ if __name__ == '__main__':
         trainer.test(model=model, datamodule=data_dm, ckpt_path=config['ckpt_path'])
 
     
-

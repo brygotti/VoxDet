@@ -127,6 +127,12 @@ class VoxDet(BaseModule):
         else:
             coarse_queries = None
 
+        # FoveaTer placement: enrich + foveate coarse_queries BEFORE cross-attention.
+        # The neck produces block-constant peripheral features (nearest-neighbour tiling)
+        # so that _pool_zone in VoxFormerHeadCrossAttention selects one token per block.
+        if coarse_queries is not None and hasattr(self, 'occ_encoder_neck'):
+            coarse_queries = self.occ_encoder_neck(coarse_queries)
+
         proposal = self.proposal_layer(img_inputs[1:7], img_metas)
         # torch.Size([1, 1, 128, 128, 16])
         # torch.Size([1, 1, 128, 48, 160])
@@ -168,10 +174,7 @@ class VoxDet(BaseModule):
     def occ_encoder(self, x):
         if hasattr(self, 'occ_encoder_backbone'):
             x = self.occ_encoder_backbone(x)
-        
-        if hasattr(self, 'occ_encoder_neck'):
-            x = self.occ_encoder_neck(x)
-
+        # occ_encoder_neck is applied to coarse_queries pre-attention in extract_img_feat
         return x
 
     def forward_train(self, data_dict):

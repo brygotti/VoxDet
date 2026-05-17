@@ -221,35 +221,33 @@ model = dict(
         mlp_prior=True,
     ),
     occ_encoder_backbone=dict(
-        type='Ident',
-        embed_dims=128,
-        local_aggregator=dict(
-            type='LocalAggregator',
-            local_encoder_backbone=dict(
-                type='CustomResNet3D',
-                numC_input=128,
-                num_layer=[2, 2, 2], 
-                num_channels=[128, 128, 128],
-                stride=[1, 2, 2],
-                norm_cfg=norm_cfg,
-            ),
-            local_encoder_neck=dict(
-                type='GeneralizedLSSFPN',
-                in_channels=[128, 128, 128],
-                out_channels=_dim_,
-                start_level=0,
-                num_outs=3,
-                norm_cfg=norm_cfg,
-                conv_cfg=dict(type='Conv3d'),
-                act_cfg=dict(
-                    type='ReLU',
-                    inplace=True),
-                upsample_cfg=dict(
-                    mode='trilinear',
-                    align_corners=False
-                )
-            )
-        )
+        type='FoveatedLocalAggregator',
+        # Spatial dims — must match VoxFormer_head's volume_h/w/z
+        volume_h=128,
+        volume_w=128,
+        volume_z=16,
+        # Foveal zone — must match VoxFormer_head's foveal_radius and fixation
+        foveal_radius=0.2,
+        fixation=[0.25, 0.5, 0.5],
+        local_encoder_backbone=dict(
+            type='CustomResNet3D',
+            numC_input=128,
+            num_layer=[2, 2, 2],
+            num_channels=[128, 128, 128],
+            stride=[1, 2, 2],
+            norm_cfg=norm_cfg,
+        ),
+        local_encoder_neck=dict(
+            type='GeneralizedLSSFPN',
+            in_channels=[128, 128, 128],
+            out_channels=_dim_,
+            start_level=0,
+            num_outs=3,
+            norm_cfg=norm_cfg,
+            conv_cfg=dict(type='Conv3d'),
+            act_cfg=dict(type='ReLU', inplace=True),
+            upsample_cfg=dict(mode='trilinear', align_corners=False),
+        ),
     ),
     pts_bbox_head=dict(
         type='OccHead',

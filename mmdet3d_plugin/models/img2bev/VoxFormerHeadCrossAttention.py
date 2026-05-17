@@ -217,7 +217,6 @@ class VoxFormerHeadCrossAttention(nn.Module):
             unmasked_idx=active_idx,
             grid_length=None,
             bev_pos=None,
-            #  bev_pos=bev_pos_cross_attn,
             img_metas=img_metas,
             prev_bev=None,
             cam_params=cam_params,

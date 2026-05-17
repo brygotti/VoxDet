@@ -14,6 +14,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import shutil
 import torch.distributed as dist
 import socket
+import wandb
 
 
 def is_main_process():
@@ -74,6 +75,7 @@ if __name__ == '__main__':
             name=run_name,
             save_dir=log_folder,
             config=config.to_dict(),
+            settings=wandb.Settings(_service_wait=300),
         )
         loggers.append(wandb_logger)
 
@@ -90,6 +92,7 @@ if __name__ == '__main__':
                 accelerator='gpu',
                 find_unused_parameters=False
             ),
+            precision=16,
             max_steps=config.training_steps,
             resume_from_checkpoint=None,
             callbacks=[
@@ -110,6 +113,7 @@ if __name__ == '__main__':
                 accelerator='gpu',
                 find_unused_parameters=False
             ),
+            precision=16,
             logger=loggers,
             profiler=profiler
         )

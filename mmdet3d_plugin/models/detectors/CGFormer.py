@@ -171,8 +171,8 @@ class CGFormer(BaseModule):
         img_voxel_feats, depth, proposal = self.extract_img_feat(img_inputs, img_metas)
         voxel_feats_enc = self.occ_encoder(img_voxel_feats)
 
-        if len(voxel_feats_enc) > 1:
-            voxel_feats_enc = [voxel_feats_enc[0]]
+        # if len(voxel_feats_enc) > 1:
+        #     voxel_feats_enc = [voxel_feats_enc[0]]
         
         if type(voxel_feats_enc) is not list:
             voxel_feats_enc = [voxel_feats_enc]

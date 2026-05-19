@@ -33,9 +33,6 @@ case "${RUN_SPEC}" in
     CONFIG_FILE="configs/baseline-dev-semantickitti-cam-distance.py"
     ;;
   foveated)
-    CONFIG_FILE="configs/foveated-semantickitti-cam.py"
-    ;;
-  foveated-backbone)
     CONFIG_FILE="configs/foveated-backbone-dev-semantickitti-cam.py"
     ;;
   *.py)
@@ -43,7 +40,7 @@ case "${RUN_SPEC}" in
     ;;
   *)
     echo "Unknown run spec: ${RUN_SPEC}" >&2
-    echo "Use baseline, distance, foveated, foveated-backbone, or a direct config path ending in .py" >&2
+    echo "Use baseline, distance, foveated, or a direct config path ending in .py" >&2
     exit 1
     ;;
 esac

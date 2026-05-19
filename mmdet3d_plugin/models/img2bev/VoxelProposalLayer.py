@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import numpy as np
@@ -89,9 +90,29 @@ class VoxelProposalLayer(BaseModule):
         depth = img_metas['stereo_depth']
         points = self.depth2lidar(self.image_grid, depth, cam_params)
         unq, unq_inv = self.lidar2voxel(points, points.device)
+
+        batch_size = int(unq[:, 0].max().item()) + 1
+
+        if os.environ.get("VOXDET_DEBUG_BOUNDS"):
+            _d = self.input_dimensions
+            _bad = (
+                (unq[:, 0] < 0) | (unq[:, 0] >= batch_size) |
+                (unq[:, 1] < 0) | (unq[:, 1] >= _d[0]) |
+                (unq[:, 2] < 0) | (unq[:, 2] >= _d[1]) |
+                (unq[:, 3] < 0) | (unq[:, 3] >= _d[2])
+            )
+            if _bad.any():
+                raise RuntimeError(
+                    f"[VoxelProposalLayer] voxel indices out of bounds — "
+                    f"batch=[{unq[:,0].min().item()}, {unq[:,0].max().item()}] vs [0,{batch_size}) "
+                    f"x=[{unq[:,1].min().item()}, {unq[:,1].max().item()}] vs [0,{_d[0]}) "
+                    f"y=[{unq[:,2].min().item()}, {unq[:,2].max().item()}] vs [0,{_d[1]}) "
+                    f"z=[{unq[:,3].min().item()}, {unq[:,3].max().item()}] vs [0,{_d[2]})"
+                )
+
         sparse_tensor = spconv.SparseConvTensor(
             torch.ones(unq.shape[0], dtype=torch.float32).view(-1, 1).to(points.device),
-            unq.int(), spatial_shape=self.input_dimensions, batch_size=(torch.max(unq[:, 0] + 1))
+            unq.int(), spatial_shape=self.input_dimensions, batch_size=batch_size,
             )
         input = sparse_tensor.dense()
 

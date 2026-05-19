@@ -114,12 +114,12 @@ class VoxFormerHeadCrossAttention(nn.Module):
         feats  = vq_mod[linear].clone()      # [n, C]
         pos    = ref_3d_mod[linear].clone()  # [n, 3]
 
-        inv_exp_c = inverse_indices.unsqueeze(1).expand_as(feats)
+        inv_exp_c = inverse_indices.unsqueeze(1).expand(-1, feats.shape[1]).contiguous()
         pooled_feats = torch.zeros(n_groups, feats.shape[1], device=device, dtype=feats.dtype)
         pooled_feats.scatter_add_(0, inv_exp_c, feats)
         pooled_feats /= counts.float().unsqueeze(1)
 
-        inv_exp_p = inverse_indices.unsqueeze(1).expand_as(pos)
+        inv_exp_p = inverse_indices.unsqueeze(1).expand(-1, 3).contiguous()
         pooled_pos = torch.zeros(n_groups, 3, device=device, dtype=pos.dtype)
         pooled_pos.scatter_add_(0, inv_exp_p, pos)
         pooled_pos /= counts.float().unsqueeze(1)
@@ -136,7 +136,7 @@ class VoxFormerHeadCrossAttention(nn.Module):
         ref_3d_mod[vox_coords[leaders, 3]] = pooled_pos
 
         # group_ids[i] = group index for zone_idx[i], used for fill-back broadcast
-        group_ids = torch.empty(n, dtype=torch.long, device=device)
+        group_ids = torch.zeros(n, dtype=torch.long, device=device)
         group_ids[sorted_order] = inverse_indices
 
         return leaders, group_ids
@@ -166,6 +166,20 @@ class VoxFormerHeadCrossAttention(nn.Module):
         lss_volume_flatten = lss_volume.flatten(2).squeeze(0).permute(1, 0)
         lss_volume_flatten = self.mlp_lss(lss_volume_flatten)
         volume_queries = lss_volume_flatten
+
+        # DEBUG: verify lss_volume and proposal match the configured voxel grid
+        _n_vox = self.volume_h * self.volume_w * self.volume_z
+        if lss_volume_flatten.shape[0] != _n_vox:
+            raise RuntimeError(
+                f"[VoxFormerHead] lss_volume spatial size {lss_volume_flatten.shape[0]} "
+                f"!= volume_h*w*z={_n_vox} ({self.volume_h}x{self.volume_w}x{self.volume_z}). "
+                f"lss_volume shape: {lss_volume.shape}"
+            )
+        if proposal.reshape(-1).shape[0] != _n_vox:
+            raise RuntimeError(
+                f"[VoxFormerHead] proposal.reshape(-1) size {proposal.reshape(-1).shape[0]} "
+                f"!= volume_h*w*z={_n_vox}. proposal shape: {proposal.shape}"
+            )
 
         if proposal.sum() < 2:
             proposal = torch.ones_like(proposal)
@@ -244,7 +258,7 @@ class VoxFormerHeadCrossAttention(nn.Module):
             vox_feats_flatten[vox_coords[unmasked_idx, 3]] = seed_feats[0]
 
         # Empty voxels (proposal == 0) always use mlp_prior
-        vox_feats_flatten[vox_coords[masked_idx, 3], :] = self.mlp_prior(lss_volume_flatten[masked_idx, :])
+        vox_feats_flatten[vox_coords[masked_idx, 3], :] = self.mlp_prior(lss_volume_flatten[masked_idx, :]).float()
 
         vox_feats = vox_feats_flatten.reshape(self.volume_h, self.volume_w, self.volume_z, self.embed_dims)
         vox_feats = vox_feats.permute(3, 0, 1, 2).unsqueeze(0)

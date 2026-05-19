@@ -42,6 +42,13 @@ class Voxelization(nn.Module):
         yidx = self.sparse_quantize(pc[:, 1], self.coors_range_xyz[1], self.spatial_shape[1])
         zidx = self.sparse_quantize(pc[:, 2], self.coors_range_xyz[2], self.spatial_shape[2])
 
+        # Clamp to valid range — floating-point arithmetic can produce an index
+        # exactly equal to spatial_shape on boundary-straddling points, which
+        # causes a CUDA index-out-of-bounds in spconv's scatter_nd.
+        xidx = xidx.clamp(0, int(self.spatial_shape[0]) - 1)
+        yidx = yidx.clamp(0, int(self.spatial_shape[1]) - 1)
+        zidx = zidx.clamp(0, int(self.spatial_shape[2]) - 1)
+
         bxyz_indx = torch.stack([batch_idx, xidx, yidx, zidx], dim=-1).long()
         unq, unq_inv, _ = torch.unique(bxyz_indx, return_inverse=True, return_counts=True, dim=0)
 

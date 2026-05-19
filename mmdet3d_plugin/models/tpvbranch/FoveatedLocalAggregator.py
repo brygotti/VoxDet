@@ -29,12 +29,11 @@ Key property: no extra parameters — backbone and neck are truly shared.
 import math
 import torch
 import torch.nn.functional as F
-from mmdet3d.models.builder import BACKBONES, NECKS
+from mmdet3d.models.builder import NECKS
 from mmdet3d.models import builder
 from mmcv.runner import BaseModule
 
 
-@BACKBONES.register_module()
 @NECKS.register_module()
 class FoveatedLocalAggregator(BaseModule):
     """Two-stream foveated 3D backbone (shared backbone + FPN neck weights).

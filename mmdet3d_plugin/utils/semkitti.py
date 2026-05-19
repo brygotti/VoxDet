@@ -82,15 +82,20 @@ def geo_scal_loss(pred, ssc_target, ignore_index=255, non_empty_idx=0):
     empty_probs = empty_probs[mask]
 
     eps = 1e-5
-    intersection = (nonempty_target * nonempty_probs).sum()
-    precision = intersection / (nonempty_probs.sum()+eps)
-    recall = intersection / (nonempty_target.sum()+eps)
-    spec = ((1 - nonempty_target) * (empty_probs)).sum() / ((1 - nonempty_target).sum()+eps)
-    return (
-        F.binary_cross_entropy(precision, torch.ones_like(precision))
-        + F.binary_cross_entropy(recall, torch.ones_like(recall))
-        + F.binary_cross_entropy(spec, torch.ones_like(spec))
-    )
+    with torch.cuda.amp.autocast(enabled=False):
+        nonempty_probs_f = nonempty_probs.float()
+        empty_probs_f = empty_probs.float()
+        nonempty_target_f = nonempty_target.float()
+        intersection = (nonempty_target_f * nonempty_probs_f).sum()
+        precision = (intersection / (nonempty_probs_f.sum() + eps)).clamp(0, 1)
+        recall = (intersection / (nonempty_target_f.sum() + eps)).clamp(0, 1)
+        spec = ((1 - nonempty_target_f) * empty_probs_f).sum() / ((1 - nonempty_target_f).sum() + eps)
+        spec = spec.clamp(0, 1)
+        return (
+            F.binary_cross_entropy(precision, torch.ones_like(precision))
+            + F.binary_cross_entropy(recall, torch.ones_like(recall))
+            + F.binary_cross_entropy(spec, torch.ones_like(spec))
+        )
 
 
 def sem_scal_loss(pred, ssc_target, ignore_index=255):
@@ -116,26 +121,20 @@ def sem_scal_loss(pred, ssc_target, ignore_index=255):
         completion_target_ori[target_ori != i] = 0
         if torch.sum(completion_target) > 0:
             count += 1.0
-            nominator = torch.sum(p * completion_target)
             loss_class = 0
-            if torch.sum(p) > 0:
-                precision = nominator / (torch.sum(p))
-                loss_precision = F.binary_cross_entropy(
-                    precision, torch.ones_like(precision)
-                )
-                loss_class += loss_precision
-            if torch.sum(completion_target) > 0:
-                recall = nominator / (torch.sum(completion_target))
-                loss_recall = F.binary_cross_entropy(recall, torch.ones_like(recall))
-                loss_class += loss_recall
-            if torch.sum(1 - completion_target) > 0:
-                specificity = torch.sum((1 - p) * (1 - completion_target)) / (
-                    torch.sum(1 - completion_target)
-                )
-                loss_specificity = F.binary_cross_entropy(
-                    specificity, torch.ones_like(specificity)
-                )
-                loss_class += loss_specificity
+            with torch.cuda.amp.autocast(enabled=False):
+                p_f = p.float()
+                ct_f = completion_target.float()
+                nominator = torch.sum(p_f * ct_f)
+                if torch.sum(p_f) > 0:
+                    precision = (nominator / torch.sum(p_f)).clamp(0, 1)
+                    loss_class += F.binary_cross_entropy(precision, torch.ones_like(precision))
+                if torch.sum(ct_f) > 0:
+                    recall = (nominator / torch.sum(ct_f)).clamp(0, 1)
+                    loss_class += F.binary_cross_entropy(recall, torch.ones_like(recall))
+                if torch.sum(1 - ct_f) > 0:
+                    specificity = (torch.sum((1 - p_f) * (1 - ct_f)) / torch.sum(1 - ct_f)).clamp(0, 1)
+                    loss_class += F.binary_cross_entropy(specificity, torch.ones_like(specificity))
             loss += loss_class
     return loss / count
 

@@ -172,8 +172,10 @@ def _live_flops(model, dummy):
     try:
         from fvcore.nn import FlopCountAnalysis
         fa = FlopCountAnalysis(model, dummy)
-        fa.unsupported_ops_settings(warn=False, error=False)
-        fa.tracer_warnings("none")
+        if hasattr(fa, "unsupported_ops_settings"):
+            fa.unsupported_ops_settings(warn=False, error=False)
+        if hasattr(fa, "tracer_warnings"):
+            fa.tracer_warnings("none")
         return fa.total() / 1e9, 'fvcore'
     except ImportError:
         pass

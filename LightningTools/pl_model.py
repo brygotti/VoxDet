@@ -2,6 +2,7 @@ import os
 import torch
 import numpy as np
 import pytorch_lightning as pl
+import mmdet3d_plugin  # Ensure custom model registry entries are loaded.
 from .basemodel import LightningBaseModel
 from .metric import SSCMetrics
 from mmdet3d.models import build_model

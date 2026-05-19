@@ -62,6 +62,8 @@ else
 fi
 conda activate voxdet
 
+export PYTHONPATH="${PWD}:${PYTHONPATH}"
+
 echo "SLURM_JOB_ID=$SLURM_JOB_ID"
 echo "HOSTNAME=$(hostname)"
 echo "CONFIG_FILE=$CONFIG_FILE"

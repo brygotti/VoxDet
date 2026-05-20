@@ -172,12 +172,10 @@ model = dict(
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         embed_dims=_dim_,
-        # Zone 1: foveal — no pooling (full resolution)
+        # Query pooling only (no foveated voxel backbone).
         foveal_radius=0.2,
-        # Zone 2: mid — 3×3×3 block pooling
         mid_radius=0.4,
         mid_stride=3,
-        # Zone 3: peripheral — 5×5×5 block pooling
         peripheral_stride=5,
         fixation=[0.25, 0.5, 0.5],
         cross_transformer=dict(
@@ -223,34 +221,32 @@ model = dict(
         ),
         mlp_prior=True,
     ),
-    # Applied to coarse_queries BEFORE cross-attention (FoveaTer placement).
-    # foveal_radius and fixation must match VoxFormer_head exactly.
-    occ_encoder_neck=dict(
-        type='FoveatedLocalAggregator',
-        volume_h=128,
-        volume_w=128,
-        volume_z=16,
-        foveal_radius=0.2,
-        fixation=[0.25, 0.5, 0.5],
-        local_encoder_backbone=dict(
-            type='CustomResNet3D',
-            numC_input=128,
-            num_layer=[2, 2, 2],
-            num_channels=[128, 128, 128],
-            stride=[1, 2, 2],
-            norm_cfg=norm_cfg,
-        ),
-        local_encoder_neck=dict(
-            type='GeneralizedLSSFPN',
-            in_channels=[128, 128, 128],
-            out_channels=_dim_,
-            start_level=0,
-            num_outs=3,
-            norm_cfg=norm_cfg,
-            conv_cfg=dict(type='Conv3d'),
-            act_cfg=dict(type='ReLU', inplace=True),
-            upsample_cfg=dict(mode='trilinear', align_corners=False),
-        ),
+    # No occ_encoder_neck: keep full-res lss_volume for query pooling.
+    occ_encoder_backbone=dict(
+        type='Ident',
+        embed_dims=128,
+        local_aggregator=dict(
+            type='LocalAggregator',
+            local_encoder_backbone=dict(
+                type='CustomResNet3D',
+                numC_input=128,
+                num_layer=[2, 2, 2],
+                num_channels=[128, 128, 128],
+                stride=[1, 2, 2],
+                norm_cfg=norm_cfg,
+            ),
+            local_encoder_neck=dict(
+                type='GeneralizedLSSFPN',
+                in_channels=[128, 128, 128],
+                out_channels=_dim_,
+                start_level=0,
+                num_outs=3,
+                norm_cfg=norm_cfg,
+                conv_cfg=dict(type='Conv3d'),
+                act_cfg=dict(type='ReLU', inplace=True),
+                upsample_cfg=dict(mode='trilinear', align_corners=False),
+            )
+        )
     ),
     pts_bbox_head=dict(
         type='OccHead',

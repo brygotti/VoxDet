@@ -172,14 +172,7 @@ model = dict(
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         embed_dims=_dim_,
-        # Zone 1: foveal — no pooling (full resolution)
-        foveal_radius=0.2,
-        # Zone 2: mid — 3×3×3 block pooling
-        mid_radius=0.4,
-        mid_stride=3,
-        # Zone 3: peripheral — 5×5×5 block pooling
-        peripheral_stride=5,
-        fixation=[0.25, 0.5, 0.5],
+        # Query pooling disabled for voxel-only ablation.
         cross_transformer=dict(
             type='PerceptionTransformer_DFA3D',
             rotate_prev_bev=True,
@@ -224,7 +217,6 @@ model = dict(
         mlp_prior=True,
     ),
     # Applied to coarse_queries BEFORE cross-attention (FoveaTer placement).
-    # foveal_radius and fixation must match VoxFormer_head exactly.
     occ_encoder_neck=dict(
         type='FoveatedLocalAggregator',
         volume_h=128,

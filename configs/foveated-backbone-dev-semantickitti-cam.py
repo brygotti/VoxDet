@@ -1,6 +1,6 @@
-data_root = '/scratch/izar/lagutova/semantickittii/dataset/'
-ann_file = '/scratch/izar/lagutova/semantickittii/labels/'
-stereo_depth_root = '/scratch/izar/lagutova/semantickittii/dataset/depth/'
+data_root = '/scratch/izar/gotti/semantic_kitti/'
+ann_file = '/scratch/izar/gotti/semantic_kitti/labels/'
+stereo_depth_root = '/scratch/izar/gotti/semantic_kitti/depth/'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDataset'
@@ -97,7 +97,7 @@ data = dict(
 )
 
 train_dataloader_config = dict(
-    batch_size=2,
+    batch_size=1,
     num_workers=4)
 
 test_dataloader_config = dict(
@@ -293,4 +293,4 @@ lr_scheduler = dict(
     frequency=1
 )
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
-load_from='/home/lagutova/VI-Project/VoxDet/ckpts/preatrain_depth_model.ckpt'
+load_from='/scratch/izar/gotti/preatrain_depth_model.ckpt'

@@ -82,9 +82,10 @@ class VoxFormerHeadCrossAttention(nn.Module):
 
         return vox_coords, ref_3d
 
-    def _pool_zone(self, zone_idx, stride, vq_mod, ref_3d_mod, vox_coords, device):
-        """Spatial block average-pool: group tokens whose voxel coords fall in the
-        same stride×stride×stride block, average their features and positions.
+    def _pool_zone(self, zone_idx, stride, vq_mod, ref_3d_mod, vox_coords, device, pool_mode='avg'):
+        """Spatial block pool: group tokens whose voxel coords fall in the
+        same stride×stride×stride block, pool their features and average positions.
+        pool_mode: 'avg' (mean) or 'max' (element-wise max) over features.
         Returns (leaders_idx, group_ids) where group_ids[i] maps zone_idx[i]
         to its group's position in the attention output."""
         n = len(zone_idx)
@@ -109,15 +110,19 @@ class VoxFormerHeadCrossAttention(nn.Module):
         )
         n_groups = len(counts)
 
-        # Scatter-add features and positions into group buckets, then normalise
+        # Pool features and average positions into group buckets
         linear = vox_coords[sorted_zone, 3]
         feats  = vq_mod[linear].clone()      # [n, C]
         pos    = ref_3d_mod[linear].clone()  # [n, 3]
 
         inv_exp_c = inverse_indices.unsqueeze(1).expand(-1, feats.shape[1]).contiguous()
-        pooled_feats = torch.zeros(n_groups, feats.shape[1], device=device, dtype=feats.dtype)
-        pooled_feats.scatter_add_(0, inv_exp_c, feats)
-        pooled_feats /= counts.float().unsqueeze(1)
+        if pool_mode == 'max':
+            pooled_feats = torch.full((n_groups, feats.shape[1]), float('-inf'), device=device, dtype=feats.dtype)
+            pooled_feats.scatter_reduce_(0, inv_exp_c, feats, reduce='amax', include_self=True)
+        else:
+            pooled_feats = torch.zeros(n_groups, feats.shape[1], device=device, dtype=feats.dtype)
+            pooled_feats.scatter_add_(0, inv_exp_c, feats)
+            pooled_feats /= counts.float().unsqueeze(1)
 
         inv_exp_p = inverse_indices.unsqueeze(1).expand(-1, 3).contiguous()
         pooled_pos = torch.zeros(n_groups, 3, device=device, dtype=pos.dtype)
@@ -203,11 +208,11 @@ class VoxFormerHeadCrossAttention(nn.Module):
                 mid_unmasked = unmasked_idx[beyond_foveal]
                 peri_unmasked = unmasked_idx.new_empty(0)
 
-            # Average-pool mid and peripheral zones; write pooled queries AND positions to leader slots
+            # Pool mid (avg) and peripheral (max) zones; write pooled queries AND positions to leader slots
             vq_mod     = volume_queries.clone()
             ref_3d_mod = ref_3d.clone()
-            mid_leaders, mid_group_ids   = self._pool_zone(mid_unmasked,  self.mid_stride,          vq_mod, ref_3d_mod, vox_coords, device)
-            peri_leaders, peri_group_ids = self._pool_zone(peri_unmasked, self.peripheral_stride,   vq_mod, ref_3d_mod, vox_coords, device)
+            mid_leaders, mid_group_ids   = self._pool_zone(mid_unmasked,  self.mid_stride,        vq_mod, ref_3d_mod, vox_coords, device, pool_mode='avg')
+            peri_leaders, peri_group_ids = self._pool_zone(peri_unmasked, self.peripheral_stride, vq_mod, ref_3d_mod, vox_coords, device, pool_mode='max')
 
             active_idx     = torch.cat([foveal_unmasked, mid_leaders, peri_leaders])
             volume_queries = vq_mod

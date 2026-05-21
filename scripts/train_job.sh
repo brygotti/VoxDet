@@ -41,12 +41,15 @@ case "${RUN_SPEC}" in
   ablation-query-only)
     CONFIG_FILE="configs/ablation-query-only-dev-semantickitti-cam.py"
     ;;
+  foveated-distance)
+    CONFIG_FILE="configs/foveated-backbone-dev-semantickitti-cam-distance.py"
+    ;;
   *.py)
     CONFIG_FILE="${RUN_SPEC}"
     ;;
   *)
     echo "Unknown run spec: ${RUN_SPEC}" >&2
-    echo "Use baseline, distance, foveated, ablation-voxel-only, ablation-query-only, or a direct config path ending in .py" >&2
+    echo "Use baseline, distance, foveated, ablation-voxel-only, ablation-query-only, foveated-distance, or a direct config path ending in .py" >&2
     exit 1
     ;;
 esac

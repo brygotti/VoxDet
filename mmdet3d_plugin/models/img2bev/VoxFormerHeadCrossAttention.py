@@ -118,7 +118,14 @@ class VoxFormerHeadCrossAttention(nn.Module):
         inv_exp_c = inverse_indices.unsqueeze(1).expand(-1, feats.shape[1]).contiguous()
         if pool_mode == 'max':
             pooled_feats = torch.full((n_groups, feats.shape[1]), float('-inf'), device=device, dtype=feats.dtype)
-            pooled_feats.scatter_reduce_(0, inv_exp_c, feats, reduce='amax', include_self=True)
+            group_starts = torch.cat([
+                torch.zeros(1, device=device, dtype=torch.long),
+                counts.cumsum(0)[:-1],
+            ])
+            for group_idx in range(n_groups):
+                start = group_starts[group_idx].item()
+                end = start + counts[group_idx].item()
+                pooled_feats[group_idx] = feats[start:end].max(dim=0).values
         else:
             pooled_feats = torch.zeros(n_groups, feats.shape[1], device=device, dtype=feats.dtype)
             pooled_feats.scatter_add_(0, inv_exp_c, feats)

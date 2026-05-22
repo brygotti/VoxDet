@@ -175,6 +175,7 @@ model = dict(
         mid_stride=3,
         # Zone 3: peripheral — MAX 5×5×5 block pooling
         peripheral_stride=5,
+        peripheral_pool_mode='max',
         fixation=[0.25, 0.5, 0.5],
         cross_transformer=dict(
             type='PerceptionTransformer_DFA3D',

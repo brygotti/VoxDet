@@ -215,11 +215,11 @@ class VoxFormerHeadCrossAttention(nn.Module):
                 mid_unmasked = unmasked_idx[beyond_foveal]
                 peri_unmasked = unmasked_idx.new_empty(0)
 
-            # Pool mid (avg) and peripheral (max) zones; write pooled queries AND positions to leader slots
+            # Pool mid (avg) and peripheral (avg) zones; write pooled queries AND positions to leader slots
             vq_mod     = volume_queries.clone()
             ref_3d_mod = ref_3d.clone()
             mid_leaders, mid_group_ids   = self._pool_zone(mid_unmasked,  self.mid_stride,        vq_mod, ref_3d_mod, vox_coords, device, pool_mode='avg')
-            peri_leaders, peri_group_ids = self._pool_zone(peri_unmasked, self.peripheral_stride, vq_mod, ref_3d_mod, vox_coords, device, pool_mode='max')
+            peri_leaders, peri_group_ids = self._pool_zone(peri_unmasked, self.peripheral_stride, vq_mod, ref_3d_mod, vox_coords, device, pool_mode='avg')
 
             active_idx     = torch.cat([foveal_unmasked, mid_leaders, peri_leaders])
             volume_queries = vq_mod

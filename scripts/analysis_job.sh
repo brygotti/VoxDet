@@ -3,9 +3,10 @@
 #SBATCH --time=00:10:00
 #SBATCH --account=cs-503
 #SBATCH --qos=cs-503
-#SBATCH --mem=8G
+#SBATCH --gres=gpu:1
+#SBATCH --mem=64G
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=8
 #SBATCH --output=voxdet_analysis_%j.out
 #SBATCH --error=voxdet_analysis_%j.err
 

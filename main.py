@@ -22,6 +22,17 @@ def is_main_process():
     return dist.get_rank() == 0
 
 
+def _parse_set_value(raw):
+    if raw == 'None':  return None
+    if raw == 'True':  return True
+    if raw == 'False': return False
+    try:    return int(raw)
+    except ValueError: pass
+    try:    return float(raw)
+    except ValueError: pass
+    return raw
+
+
 def parse_config():
     parser = ArgumentParser()
     parser.add_argument('--config_path', default='./configs/semantic_kitti.py')
@@ -35,9 +46,20 @@ def parse_config():
     parser.add_argument('--log_every_n_steps', type=int, default=100)
     parser.add_argument('--check_val_every_n_epoch', type=int, default=1)
     parser.add_argument('--pretrain', action='store_true')
+    parser.add_argument('--set', action='append', metavar='KEY=VALUE', default=[],
+                        help='Override a config value, e.g. --set model.VoxFormer_head.mid_stride=4')
 
     args = parser.parse_args()
     cfg = Config.fromfile(args.config_path)
+
+    for kv in args.set:
+        key, _, raw = kv.partition('=')
+        value = _parse_set_value(raw)
+        keys = key.split('.')
+        d = cfg
+        for k in keys[:-1]:
+            d = d[k]
+        d[keys[-1]] = value
 
     cfg.update(vars(args))
     return args, cfg

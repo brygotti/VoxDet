@@ -58,7 +58,9 @@ set -e
 
 # Non-interactive batch shells often lack conda hook; common miniconda layout on Izar.
 # shellcheck disable=SC1091
-if [[ -f "${HOME}/miniconda3/etc/profile.d/conda.sh" ]]; then
+if [[ -f "${HOME}/miniconda/etc/profile.d/conda.sh" ]]; then
+  source "${HOME}/miniconda/etc/profile.d/conda.sh"
+elif [[ -f "${HOME}/miniconda3/etc/profile.d/conda.sh" ]]; then
   source "${HOME}/miniconda3/etc/profile.d/conda.sh"
 elif [[ -f "${HOME}/anaconda3/etc/profile.d/conda.sh" ]]; then
   source "${HOME}/anaconda3/etc/profile.d/conda.sh"

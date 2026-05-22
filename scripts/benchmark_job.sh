@@ -17,6 +17,7 @@
 #   sbatch benchmark_job.sh baseline ./ckpts/voxdet-semantickitti-cam.ckpt "1 2 4" both 10 50 cuda
 #   sbatch benchmark_job.sh distance ./ckpts/voxdet-semantickitti-cam.ckpt "1" e2e 5 30 cuda
 #   sbatch benchmark_job.sh configs/foveated-semantickitti-cam.py ./ckpts/voxdet-semantickitti-cam.ckpt "1 2" model 10 50 cuda
+#   sbatch benchmark_job.sh baseline ./ckpts/voxdet-semantickitti-cam.ckpt "1" model 10 50 cuda --profile_parts
 
 cd "${SLURM_SUBMIT_DIR:-.}"
 
@@ -27,7 +28,7 @@ MEASURE=${4:-model}
 NUM_WARMUP=${5:-10}
 NUM_ITERS=${6:-50}
 DEVICE=${7:-cuda}
-EXTRA_ARGS=(${*:8})
+EXTRA_ARGS=("${@:8}")
 
 case "${RUN_SPEC}" in
   baseline)

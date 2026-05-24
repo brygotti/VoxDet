@@ -44,6 +44,9 @@ case "${RUN_SPEC}" in
   foveated-distance)
     CONFIG_FILE="configs/foveated-backbone-dev-semantickitti-cam-distance.py"
     ;;
+  voxel-only-distance)
+    CONFIG_FILE="configs/ablation-voxel-only-dev-semantickitti-cam-distance.py"
+    ;;
   *.py)
     CONFIG_FILE="${RUN_SPEC}"
     ;;

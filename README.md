@@ -1,217 +1,134 @@
-# [NeurIPS 25 Spotlight] VoxDet: Rethinking 3D Semantic Scene Completion as Dense Object Detection
+# Foveated Transformer for 3D Occuppancy Prediction
 
-### [[Project Page]](https://vita-epfl.github.io/VoxDet/)  [[ArXiv]](https://arxiv.org/abs/2506.04623) [[PPT]](./assets/Pre.pdf) 
+This repository contains the complete implementation and supporting modules for the course project titled **“Foveated Transformer for 3D Occuppancy Prediction”**, developed as part of the EPFL CS503 — Visual Intelligence: Machines and Minds course, in 2026.
 
-📌 This is the official PyTorch implementation of the work:
+Inspired by human foveated vision, the project explores whether the model can allocate more importance to critical regions of space and use lower resolution for the periphery in an attempt to gain efficency, while keeping prediction accurate.
 
-> [**VoxDet: Rethinking 3D Semantic Occupancy Prediction as Dense Object Detection**](https://arxiv.org/abs/2506.04623) <br>
-> [Wuyang Li <sup>1 </sup>](https://wymancv.github.io/wuyang.github.io/), [Zhu Yu <sup>2 </sup>](https://scholar.google.com/citations?user=oP4-z_QAAAAJ&hl=en), [Alexandre Alahi <sup>1 </sup>](https://scholar.google.com/citations?user=UIhXQ64AAAAJ&hl=en) <br><sup>1 </sup> École Polytechnique Fédérale de Lausanne (EPFL); <sup>2 </sup> Zhejiang University
+## Inspired from VoxDet 
 
-<div align="center">
-    <img width="100%" alt="VoxDet overview" src="assets/introduction.png"/>
-</div>
+This repository is largely based on the official VoxDet model. See the original project and paper for full details:
 
-**📧 Contact**: [wuyang.li@epfl.ch](mailto:wuyang.li@epfl.ch)
+- Project page: https://vita-epfl.github.io/VoxDet/
+- ArXiv: https://arxiv.org/abs/2506.04623
 
-## ✨ Highlight
+This work keeps the original VoxDet architecture and training pipeline, and adds focused changes for efficiency: an adaptive loss module, and foveated tokenization (two variants). To see the changes made on top of the original model, refer to the commit history.
 
-*VoxDet* addresses semantic occupancy prediction with an instance-centric formulation inspired by dense object detection, which uses a *Voxel-to-Instance (VoxNT)* trick for freely transferring voxel-level class labels to instance-level offset labels.
+---
 
-- **Versatile**: Adaptable to various voxel-based scenarios, such as camera and LiDAR settings.
-- **Powerful**: Achieves joint state-of-the-art performance on both camera-based and LiDAR-based SSC benchmarks.
-- **Efficient**: Fast (~1.3× speed-up) and lightweight (~57.9% parameter reduction).
-- **Leaderboard Topper**: Achieves 63.0 IoU (single-frame model), securing 1st place on the SemanticKITTI leaderboard.
+**Quick model summary**
 
-Note that VoxDet is a single-frame single-model method without extra data and labels.
+VoxDet reformulates 3D semantic occupancy prediction as a dense object-detection-like task. Voxel features are aggregated into instance-centric tokens (VoxNT), the network predicts instance offsets and semantics, and outputs are pooled back to dense voxel occupancy. We preserve this core pipeline and extend it as described next.
 
-<div align="center">
-    <img width="100%" alt="VoxDet overview" src="assets/leaderboard.png"/>
-</div>
+**Foveated Transformer: main changes**
 
-## 🔧 Installation 
+- **Simplified baseline**: the changes are implemented on a clean backbone, where the regression branch has been removed from the original sibling head, keeping a single classification + offset head. This simplifies training, reduces parameters, and makes the experiments easier to interpret.
 
+  ![Simplified baseline](assets/simplified-baseline.png)
 
-Please refer to [docs/install.md](docs/install.md) for detailed. This work is built on the CGFormer codebase. The installation, data preparation, training, and inference are consistent with CGFormer. If something is missing, you can check that codebase :)
+- **Adaptive loss**: dynamic per-loss weighting that puts more weight on the voxels that are close to the camera and then decreases over the distance. Three versions are implemented: linear, exponential and inverse.  
 
+  ![Adaptive loss](assets/adaptive-loss.png)
 
-## 📦 Dataset Preparation
-
-Please refer to [docs/dataset.md](docs/dataset.md) for detailed dataset preparation instructions. Remember to change the data_root, ann_file and stereo_depth_root in every config file with your data path.
+- **Foveated tokenization**: two tokenization strategies to trade off computational cost vs. prediction quality:
+  - **Voxel-only foveation**: the feature voxels go through a 2x2x2 pooling before processing and upsampling back to their original dimensions. In parallel, the center of the volume is processed at full resolution. Then, the center of the fully processed volume is removed to integrate the higher resolution center.
+  
+    ![Voxel-only foveation](assets/voxel-only.png)
+  - **Query-only foveation**: the feature volume then goes through cross attention. At this point, voxel queries are separated into three regions and the peripheral regions are pooled.
 
 
-## 🏃 Train VoxDet
+    ![Query-only foveation](assets/query-only.png)
 
-Download the depth pretraining model [onedrive](https://1drv.ms/u/c/350a4d1d810f5398/EbTX6xv2NylIq3CYhgJKxKwBh0aV0Q7XUe7pK9eTEptUcg?e=4JImgH), and then change `load_from` in all confige files accordingly. This pre-training is consistent with CGFormer using the config `configs/pretrain.py`.
+- **Results**: summary of the resulting inference time and predictive quality metrics (IoU, mIoU). The impact of the query reduction is negligible on inference time. However, when combined with voxel reduction, it provides worse performance than running the voxel reduction on its own. Thus the best efficiency gain comes from running voxel-only. Running foveation with a linear distance loss does not result in better performance.
 
-Please refer to the reproduced log in the logs folder after code cleaning to ensure that every step is correct.
+  ![Results overview](assets/results.png)
 
-### Camera-based SemanticKITTI
+---
 
-2× A100 40G
+# Project Structure
+
+```
+VoxDet/
+├── assets/             # images
+├── configs/            # all model configs (see specific files below)
+├── docs/               # documentation
+├── logs/               # saved results from the original VoxDet model
+├── mmdet3d_plugin/     # optional extensions
+├── packages/           # needed packages
+├── scripts/            # job wrappers
+├── tools/              # preprocessing and testing scripts
+├── vggt/               # models
+├── .gitignore
+├── LICENSE
+├── README.md
+├── main.py             # train / eval / save predictions
+├── misc                # utils to create directories / save settings
+├── organize_ckpt.py    # helper to convert / organize pretrained checkpoints
+└── requirements.txt
+```
+
+---
+
+Key config files
+
+- Baseline: `configs/baseline-dev-semantickitti-cam.py`
+- Adaptive loss: `configs/baseline-dev-semantickitti-cam-distance.py`
+- Foveation (both variants): `configs/foveated-backbone-dev-semantickitti-cam.py`
+- Voxel-only foveation: `configs/ablation-voxel-only-dev-semantickitti-cam.py`
+- Query-only foveation: `configs/ablation-query-only-dev-semantickitti-cam.py`
+- Foveation and adaptive loss: `configs/foveated-backbone-dev-semantickitti-cam-distance.py`
+- Voxel-only foveation and adaptive loss: `configs/ablation-voxel-only-dev-semantickitti-cam-distance.py`
+
+---
+
+# Setup & Installation
+
+**Clone the repository:**
+   ```bash
+   git clone https://github.com/brygotti/VoxDet
+   cd VoxDet
+   ```
+
+**Data download & preprocessing:** </br>
+Follow `docs/dataset.md` for instructions regarding data download and preprocessing. If you are working on SLURM, you can use `scripts/preprocess_job.sh` to preprocess the dataset.
+
+**Environment:** </br>
+Follow `docs/install.md` for environment setup, CUDA and Python versions and dependency installation.
+
+# How to Use ? 
+
+## Training
+Use the job wrapper `scripts/train_job.sh` to launch training (SLURM). It accepts a run spec (named mode or direct config path), a WandB key, a run name and number of GPUs. Example:
+```bash
+sbatch train_job.sh baseline <WANDB_KEY> voxdet-baseline 2
+```
+
+`scripts/train_job.sh` selects the correct config from the named modes: `baseline`, `distance`, `foveated`, `ablation-voxel-only`, `ablation-query-only`, `foveated-distance`, `voxel-only-distance`, or any `*.py` config path.
+
+## Testing
+
+- Use `scripts/benchmark_job.sh` to measure inference throughput and latency. 
+- Use `scripts/eval_job.sh` to evaluate a checkpoint and optionally save predictions.
+- Use `scripts/flops_tokens_job.sh` to compute FLOPS and token count for the foveation (both variants) model.
+
+## Visualization
+
+Once predictions are saved, generate visualization frames using `scripts/visualize_job.sh`:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 python main.py \
---config_path configs/voxdet-semantickitti-cam.py \
---log_folder voxdet-semantickitti-cam \
---seed 42 \
---log_every_n_steps 100
+sbatch visualize_job.sh /scratch/izar/gotti/semantic_kitti predictions_directory frames_directory
 ```
 
-or with 4 GPUs (24GB memory)
+Convert frames to a video using `scripts/video_job.sh` (requires `ffmpeg`):
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py \
---config_path configs/4gpu-semantickitti-cam.py \
---log_folder voxdet-semantickitti-cam \
---seed 42 \
---log_every_n_steps 100
+sbatch scripts/video_job.sh frames_directory output.mp4
 ```
 
-### LiDAR-based SemanticKITTI
-```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py \
---config_path configs/voxdet-semnatickitti-lidar.py \
---log_folder voxdet-semnatickitti-lidar \
---seed 42 \
---log_every_n_steps 100
-```
+---
+# Acknowledgements
 
-### Camera-based KITTI-360
+This fork builds on and extends the original VoxDet work. Please cite the original paper if you use this code: https://arxiv.org/abs/2506.04623
 
-2× A100 80G
+We are greateful for their work and thank them for their support: https://www.epfl.ch/labs/vita/.
 
-```bash
-CUDA_VISIBLE_DEVICES=0,1 python main.py \
---config_path configs/voxdet-kitt360-cam.py \
---log_folder voxdet-kitt360-cam \
---seed 42 \
---log_every_n_steps 100
-```
-
-## 📊 Evaluate VoxDet
-
-Download the pretrained models and place them in the `ckpts/` folder, then run:
-
-### Camera-based SemanticKITTI
-```bash
-python main.py \
---eval --ckpt_path ./ckpts/voxdet-semantickitti-cam.ckpt \
---config_path configs/voxdet-semantickitti-cam.py \
---log_folder voxdet-semantickitti-cam-eval \
---seed 42 \
---log_every_n_steps 100
-```
-
-### LiDAR-based SemanticKITTI
-```bash
- python main.py \
---eval --ckpt_path ./ckpts/voxdet-semantickitti-lidar.ckpt \
---config_path configs/voxdet-semnatickitti-lidar.py \
---log_folder voxdet-semantickitti-lidar-eval \
---seed 42 \
---log_every_n_steps 100
-```
-
-### Save Predictions
-Add `--save_path pred` to save prediction results:
-```bash
-python main.py \
---eval --ckpt_path ./ckpts/voxdet-semantickitti-cam.ckpt \
---config_path configs/voxdet-semantickitti-cam.py \
---log_folder voxdet-semantickitti-cam-eval \
---seed 42 \
---log_every_n_steps 100 \
---save_path pred
-```
-
-## 📋 Generate Predictions for SemanticKITTI Submission
-
-For official SemanticKITTI leaderboard submission:
-
-```bash
-python main.py \
---eval --ckpt_path ./ckpts/voxdet-semantickitti-cam.ckpt \
---config_path configs/voxdet-semantickitti-cam-submit.py \
---log_folder voxdet-semantickitti-cam-submission \
---seed 42 \
---log_every_n_steps 100 \
---save_path submission \
---test_mapping
-```
-
-## 🎯 Model Zoo
-
-
-Note that after using naive temporal fusion, VoxDet is able to achieve 20+ mIoU on SemanticKITTI test set (see logs folder).
-
-We provide all reproduced information (models, configs, logs, everything) after the code cleaning [onedrive](https://1drv.ms/f/c/350a4d1d810f5398/EqJI_DVDJ9BLt8hvOC-mRxwBDGonkOBiPRsgL7oFmHvxWQ?e=wbP2Ti). I did not test them on test set. So the performance might be slightly higer/lower than the paper, but should be very similar according to the tensorboard log.
-
-We provide pretrained models for different configurations (Test set). 
-
-| Method | Dataset | Modality | IoU | mIoU | Config  |
-|--------|---------|----------|------|------------|--------|
-| VoxDet | SemanticKITTI | Camera | 47.81 | 18.67 | [config](configs/voxdet-semantickitti-cam.py)   |
-| VoxDet | SemanticKITTI | LiDAR | 63.0 | 26.0 | [config](configs/voxdet-semnatickitti-lidar.py)  |
-| VoxDet | KITTI-360 | Camera | 48.59 | 21.40 | [config](configs/voxdet-kitt360-cam.py) |
-
-
-
-
-## 🎨 Visualization
-
-Please refer to [docs/visualization.md](docs/visualization.md).
-
-## 📝 Available Configurations
-
-VoxDet provides multiple configuration files for different scenarios:
-
-- `configs/voxdet-semantickitti-cam.py`: Camera-based SemanticKITTI training
-- `configs/voxdet-semnatickitti-lidar.py`: LiDAR-based SemanticKITTI training  
-- `configs/voxdet-kitt360-cam.py`: Camera-based KITTI-360 training
-- `configs/4gpu-semantickitti-cam.py`: 4-GPU optimized SemanticKITTI training
-- `configs/baseline-dev-semantickitti-cam.py`: Improved baseline with engineering tricks
-- `configs/pretrain.py`: first-stage depth pretraining. You need to use organize_ckpt.py to process checkpoint for model loading if you want to re-do this step by yourself. [onedrive](https://1drv.ms/u/c/350a4d1d810f5398/EbTX6xv2NylIq3CYhgJKxKwBh0aV0Q7XUe7pK9eTEptUcg?e=4JImgH) is out trained model, which is suggested to use directly.
-
-
-
-## 📈 Training Logs
-
-VoxDet (blue curve) is significantly more efficient and effective than the previous state-of-the-art method, CGFormer (gray color).
-
-<div align="center">
-    <img width="80%" alt="VoxDet logs" src="assets/log.png"/>
-</div>
-
-## 📋 TODO List
-
-- [x] Release the arXiv paper
-- [x] Release the unified codebase, including both camera-based and LiDAR-based implementations
-- [x] Release all models
-
-## 📚 Citation
-
-<div align="center">
-    <img width="100%" alt="VoxDet overview" src="assets/overall.png"/>
-</div>
-
-If you find our work helpful for your research, please consider citing our paper:
-
-```bibtex
-@inproceedings{li2025voxdet,
-  title={VoxDet: Rethinking 3D Semantic Occupancy Prediction as Dense Object Detection},
-  author={Li, Wuyang and Yu, Zhu and Alahi, Alexandre},
-  journal={NeurIPS},
-  year={2025}
-}
-```
-
-
-## 🙏 Acknowledgement
-
-Greatly appreciate the tremendous effort for the following projects!
-
-- [FCOS: Fully Convolutional One-Stage Object Detection](https://arxiv.org/abs/1904.01355)
-- [Context and Geometry Aware Voxel Transformer for Semantic Scene Completion](https://arxiv.org/abs/2405.13675)
-- [SIGMA: Semantic-complete Graph Matching For Domain Adaptive Object Detection](https://arxiv.org/abs/2203.06398)
-- [Revisiting the Sibling Head in Object Detector](https://arxiv.org/abs/2003.07540)
-- [VoxFormer: a Cutting-edge Baseline for 3D Semantic Occupancy Prediction](https://arxiv.org/abs/2302.12251)
+---

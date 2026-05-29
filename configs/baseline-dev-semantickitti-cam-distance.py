@@ -221,7 +221,7 @@ model = dict(
         local_aggregator=dict(
             type='LocalAggregator',
             local_encoder_backbone=dict(
-                type='CustomResNet3D', # Dense Projection sur la figure, extrait des features 3d
+                type='CustomResNet3D', # Dense Projection, extract 3D features
                 numC_input=128,
                 num_layer=[2, 2, 2], 
                 num_channels=[128, 128, 128],
@@ -229,13 +229,13 @@ model = dict(
                 norm_cfg=norm_cfg,
             ),
             local_encoder_neck=dict(
-                type='GeneralizedLSSFPN', # Neck fusion les features de plusieur etape de la conv (Feature Pyramid Network) (fusion plus classique sans distinction d echelle)
+                type='GeneralizedLSSFPN', # Neck fusion features of different steps of convolution (Feature Pyramid Network)
                 in_channels=[128, 128, 128],
                 out_channels=_dim_,
                 start_level=0,
                 num_outs=3,
                 norm_cfg=norm_cfg,
-                conv_cfg=dict(type='Conv3d'), # resulution plus petite, on obtient des resolution plus petite, on obtient des features plus globales
+                conv_cfg=dict(type='Conv3d'), # Smaller resolution, more global features
                 act_cfg=dict(
                     type='ReLU',
                     inplace=True),
